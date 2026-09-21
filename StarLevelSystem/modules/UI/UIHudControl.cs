@@ -110,6 +110,28 @@ namespace StarLevelSystem.modules.UI {
             characterExtendedHuds.Remove(id);
         }
 
+        // Drops every cached enemy hud so the next frame rebuilds them.
+        //
+        // The bar scale, the number's font size and whether the number is shown at all are read only when
+        // a bar is BUILT, so changing any of them left every bar already on screen - which in practice is
+        // all of them - on the old values until the creature unloaded. The four boss-hud settings had a
+        // refresh hook; their siblings did not.
+        //
+        // Also the teardown for leaving a world: these dictionaries are keyed by ZDOID and were never
+        // cleared, so re-entering carried stale entries pointing at destroyed GameObjects.
+        public static void ClearExtendedHuds() {
+            foreach (StarLevelHud hud in characterExtendedHuds.Values) {
+                if (hud?.HealthText != null) { GameObject.Destroy(hud.HealthText.gameObject); }
+            }
+            characterExtendedHuds.Clear();
+            CurrentBossHuds.Clear();
+            BossHudConfigDirty = true;
+        }
+
+        public static void OnEnemyHudConfigChanged(object s, EventArgs e) {
+            ClearExtendedHuds();
+        }
+
         // Reads the creature's modifiers, reusing the previously deserialized dictionary when the backing
         // ZDO string is unchanged. GetCreatureModifiers runs a YAML deserialize on every call, and this is
         // on the per-frame EnemyHud path, so the fast path here matters.

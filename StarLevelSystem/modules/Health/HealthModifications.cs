@@ -21,7 +21,10 @@ namespace StarLevelSystem.modules.Health {
         internal static void ApplyHealthModifications(Character chara, CharacterCacheEntry cDetails) {
             float chealth = chara.m_health; // base creature health not current total health
             if (!chara.IsPlayer() && Game.m_worldLevel > 0) {
-                chealth *= (float)Game.m_worldLevel * Game.instance.m_worldLevelEnemyHPMultiplier;
+                // Through the config rather than Game.m_worldLevelEnemyHPMultiplier. The setting existed
+                // for this and was never read, so world-level health could not be tuned at all; its
+                // default matches vanilla's multiplier, so nothing changes until an admin moves it.
+                chealth *= (float)Game.m_worldLevel * ValConfig.EnemyHealthMultiplierPerWorldLevel.Value;
             }
 
             float currentMaxHealth = chara.GetMaxHealth();

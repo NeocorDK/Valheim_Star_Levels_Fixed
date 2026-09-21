@@ -1,4 +1,4 @@
-using BepInEx;
+﻿using BepInEx;
 using BepInEx.Configuration;
 using Jotunn.Entities;
 using Jotunn.Managers;
@@ -124,7 +124,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<bool> EnableMapRingsForDistanceBonus;
         public static ConfigEntry<bool> MapRingsAboveFog;
         public static ConfigEntry<bool> DistanceBonusIsFromStarterTemple;
-        public static ConfigEntry<int> MiniMapRingGeneratorUpdatesPerFrame;
+        public static ConfigEntry<int> MinimapRingPointsPerFrame;
         public static ConfigEntry<string> DistanceRingColorOptions;
         public static ConfigEntry<bool> ControlSpawnerLevels;
         public static ConfigEntry<bool> ForceControlAllSpawns;
@@ -153,7 +153,7 @@ namespace StarLevelSystem.common {
         public static ConfigEntry<float> OffspringChanceToBeInfertile;
         public static ConfigEntry<float> EnemyHealthMultiplier;
         public static ConfigEntry<float> BossEnemyHealthMultiplier;
-        public static ConfigEntry<float> EnemyHealthPerWorldLevel;
+        public static ConfigEntry<float> EnemyHealthMultiplierPerWorldLevel;
         public static ConfigEntry<float> EnemyDamageLevelMultiplier;
         public static ConfigEntry<float> BossEnemyDamageMultiplier;
         public static ConfigEntry<bool> EnableScalingBirds;
@@ -381,12 +381,14 @@ namespace StarLevelSystem.common {
             ShowQuickConfigureButton.SettingChanged += QuickConfigureTool.OnShowButtonChanged;
 
 
-            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The Maximum number of stars that a creature can have.", false, 1, 200);
+            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The highest LEVEL a creature can reach. Level 1 has no stars, so 20 means up to 19 stars.", false, 1, 200);
             MaxLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;
-            MaxBossLevel = BindServerConfig("LevelSystem", "MaxBossLevel", 10, "The Maximum number of stars that a boss creature can have.", false, 1, 200);
+            MaxBossLevel = BindServerConfig("LevelSystem", "MaxBossLevel", 10, "The highest LEVEL a boss can reach (level 1 has no stars). A biome's BiomeMaxLevelOverride takes precedence over this, so with the shipped biome caps a boss is limited by its biome rather than by this value.", false, 1, 200);
+            MaxBossLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;
             OverLevelCreaturesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverlevedCreaturesGetRerolledOnLoad", true, "Rerolls creature levels which are above maximum defined level, when those creatures are loaded. This will automatically clean up over leveled creatures if you reduce the max level.");
             OverLevelTamesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverLevelTamesGetRerolledOnLoad", false, "Rerolls tamed creatures that have a level is above the maximum defined level. This includes biome specific level settings.");
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
+            EnableCreatureScalingPerLevel.SettingChanged += SizeModifications.StarLevelScaleChanged;
 
             EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
             EnableMapRingsForDistanceBonus = BindServerConfig("LevelSystem", "EnableMapRingsForDistanceBonus", true, "Enables map rings to show distance levels, this is a visual aid to help you see how far away from the center of the world you are.");
@@ -400,17 +402,25 @@ namespace StarLevelSystem.common {
             DistanceBonusIsFromStarterTemple.SettingChanged += modules.LocationReset.ZoneRates.OnCenterChanged;
             DistanceRingColorOptions = BindServerConfig("LevelSystem", "DistanceRingColorOptions", "White,Blue,Teal,Green,Yellow,Purple,Orange,Pink,Purple,Red,Grey", "The colors that distance rings will use, if there are more rings than colors, the color pattern will be repeated. (Optional, use an HTML hex color starting with # to have a custom color.) Available options: Red, Orange, Yellow, Green, Teal, Blue, Purple, Pink, Gray, Brown, Black");
             DistanceRingColorOptions.SettingChanged += DistanceScaleSystem.UpdateMapColorSettingsOnChange;
-            MiniMapRingGeneratorUpdatesPerFrame = BindServerConfig("LevelSystem", "MiniMapRingGeneratorUpdatesPerFrame", 1000, "The number of ring points to calculate per frame when generating the minimap rings. Higher values make this go faster, but can get it killed or cause instability.", true);
+            // Renamed from MiniMapRingGeneratorUpdatesPerFrame, which was never read by anything and
+            // whose default of 1000 sat outside the 0-150 range the int overload attaches by default -
+            // so BepInEx clamped it to 150 in every config file ever written. A fresh key avoids
+            // inheriting that clamped value now that it drives the generator for real.
+            MinimapRingPointsPerFrame = BindServerConfig("LevelSystem", "MinimapRingPointsPerFrame", 3000, "Ring points to plot per frame when generating the minimap distance rings. Higher is faster but can stutter; lower is smoother but slower.", true, 100, 50000);
             PerLevelScaleBonus = BindServerConfig("LevelSystem", "PerLevelScaleBonus", 0.10f, "The size a creature gains each star level. Negative values shrink creatures each star, down to MinimumCreatureScale.", true, -0.5f, 2f);
             PerLevelScaleBonus.SettingChanged += SizeModifications.StarLevelScaleChanged;
             MinimumCreatureScale = BindServerConfig("LevelSystem", "MinimumCreatureScale", 0.1f, "The smallest scale multiplier a creature can shrink to. Stops negative size-per-level values from producing zero-sized or inside-out creatures.", true, 0.01f, 1f);
             MinimumCreatureScale.SettingChanged += SizeModifications.StarLevelScaleChanged;
             EnableScalingInDungeons = BindServerConfig("LevelSystem", "EnableScalingInDungeons", false, "Enables scaling in dungeons, this can cause creatures to become stuck.");
             EnableColorization = BindServerConfig("LevelSystem", "EnableColorization", true, "Enables this mods colorization of creatures based on their star level.");
-            EnemyHealthMultiplier = BindServerConfig("LevelSystem", "EnemyHealthMultiplier", 1f, "The amount of health that each level gives a creature, vanilla is 1x.", false, 0f, 5f);
-            EnemyHealthPerWorldLevel = BindServerConfig("LevelSystem", "EnemyHealthPerWorldLevel", 0.2f, "The percent amount of health that each world level gives a creature, vanilla is 2x (eg 200% more health each world level).", false, 0.00f, 2f);
+            EnemyHealthMultiplier = BindServerConfig("LevelSystem", "EnemyHealthMultiplier", 1f, "Flat multiplier on creature base health. This is NOT per level - it multiplies base health once. Per-level health comes from HealthPerLevel in LevelSettings.yaml.", false, 0.01f, 5f);
+            // Renamed from EnemyHealthPerWorldLevel, which nothing read. The default matches vanilla's
+            // m_worldLevelEnemyHPMultiplier exactly, so wiring it up changes nothing until an admin
+            // moves it; the old key kept a default of 0.2, which would have gutted creature health on
+            // every existing server the moment it started taking effect.
+            EnemyHealthMultiplierPerWorldLevel = BindServerConfig("LevelSystem", "EnemyHealthMultiplierPerWorldLevel", 2f, "Health multiplier each world level gives a creature. Vanilla is 2 (world level 1 doubles health, world level 2 quadruples it). 1 disables world level health scaling.", false, 0f, 10f);
             EnemyDamageLevelMultiplier = BindServerConfig("LevelSystem", "EnemyDamageLevelMultiplier", 0.1f, "The amount of damage that each level gives a creatures, vanilla is 0.5x (eg 50% more damage each level).", false, 0.00f, 2f);
-            BossEnemyHealthMultiplier = BindServerConfig("LevelSystem", "BossEnemyHealthMultiplier", 0.3f, "The amount of health that each level gives a boss. 1 is 100% more health per level.", false, 0f, 5f);
+            BossEnemyHealthMultiplier = BindServerConfig("LevelSystem", "BossEnemyHealthMultiplier", 0.3f, "Flat multiplier on boss base health, applied once and NOT per level. The default of 0.3 therefore gives a boss 30% of its vanilla health; use 1 to leave bosses alone.", false, 0.01f, 5f);
             BossEnemyDamageMultiplier = BindServerConfig("LevelSystem", "BossEnemyDamageMultiplier", 0.02f, "The amount of damage that each level gives a boss. 1 is 100% more damage per level.", false, 0f, 5f);
             RandomizeTameChildrenLevels = BindServerConfig("LevelSystem", "RandomizeTameLevels", false, "Randomly rolls bred creature levels, instead of inheriting from parent.");
             RandomizeTameChildrenModifiers = BindServerConfig("LevelSystem", "RandomizeTameChildrenModifiers", true, "Randomly rolls bred creatures modifiers instead of inheriting from a parent");
@@ -431,23 +441,23 @@ namespace StarLevelSystem.common {
             TreeMaxLevel = BindServerConfig("ObjectLevels", "TreeMaxLevel", 10, "Sets the max level that trees can scale up to.", true, 1, 150);
             RockMaxLevel = BindServerConfig("ObjectLevels", "RockMaxLevel", 10, "Sets the max level that rocks can scale up to.", true, 1, 150);
             DestructibleMaxLevel = BindServerConfig("ObjectLevels", "DestructibleMaxLevel", 1, "Sets the max level that generic destructibles can be leveled to", true, 1, 150);
-            FishSizeScalePerLevel = BindServerConfig("ObjectLevels", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.");
+            FishSizeScalePerLevel = BindServerConfig("ObjectLevels", "FishSizeScalePerLevel", 0.1f, "The amount of size that fish gain per level 0.1 = 10% larger per level.", false, 0f, 5f);
             FishSizeScalePerLevel.SettingChanged += UpdateLevelsOnChange.UpdateFishSizeOnConfigChange;
             EnableTreeScaling = BindServerConfig("ObjectLevels", "EnableTreeScaling", true, "Enables level scaling of trees. Make the trees bigger than reasonable? sure why not.");
             EnableTreeScaling.SettingChanged += UpdateLevelsOnChange.UpdateTreeSizeOnConfigChange;
             UseDeterministicTreeScaling = BindServerConfig("ObjectLevels", "UseDeterministicTreeScaling", true, "Scales the level of trees based on biome and distance from the center/spawn. This does not randomize tree levels, but reduces network usage.");
-            TreeSizeScalePerLevel = BindServerConfig("ObjectLevels", "TreeSizeScalePerLevel", 0.1f, "The amount of size that trees gain per level 0.1 = 10% larger per level.");
+            TreeSizeScalePerLevel = BindServerConfig("ObjectLevels", "TreeSizeScalePerLevel", 0.1f, "The amount of size that trees gain per level 0.1 = 10% larger per level.", false, 0f, 5f);
             TreeSizeScalePerLevel.SettingChanged += UpdateLevelsOnChange.UpdateTreeSizeOnConfigChange;
-            PerLevelTreeLootScale = BindServerConfig("ObjectLevels", "PerLevelTreeLootScale", 0.5f, "The amount of additional wood that each level grants for a tree.", true);
-            PerLevelBirdLootScale = BindServerConfig("ObjectLevels", "PerLevelBirdLootScale", 0.3f, "Per level additional loot that birds gain.", true);
-            PerLevelMineRockLootScale = BindServerConfig("ObjectLevels", "PerLevelMineRockLootScale", 0.2f, "The amount of additional stones and ores that each level grants for a rock", true);
-            PerLevelDestructibleLootScale = BindServerConfig("ObjectLevels", "PerLevelDestructibleLootScale", 0.2f, "The amount of additional loot that destructible items grant for each level", true);
+            PerLevelTreeLootScale = BindServerConfig("ObjectLevels", "PerLevelTreeLootScale", 0.5f, "The amount of additional wood that each level grants for a tree.", true, 0f, 10f);
+            PerLevelBirdLootScale = BindServerConfig("ObjectLevels", "PerLevelBirdLootScale", 0.3f, "Per level additional loot that birds gain.", true, 0f, 10f);
+            PerLevelMineRockLootScale = BindServerConfig("ObjectLevels", "PerLevelMineRockLootScale", 0.2f, "The amount of additional stones and ores that each level grants for a rock.", true, 0f, 10f);
+            PerLevelDestructibleLootScale = BindServerConfig("ObjectLevels", "PerLevelDestructibleLootScale", 0.2f, "The amount of additional loot that destructible items grant for each level.", true, 0f, 10f);
 
-            MultiplayerEnemyDamageModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyDamageModifier", 0.05f, "The additional amount of damage enemies will do to players, when there is a group of players together, per player. .2 = 20%. Vanilla gives creatures 4% more damage per player nearby.", true, 0, 2f);
-            MultiplayerEnemyHealthModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyHealthModifier", 0.2f, "Enemies take reduced damage when there is a group of players, vanilla gives creatures 30% damage resistance per player nearby.", true, 0, 0.99f);
-            MultiplayerEnemyMinDamageTaken = BindServerConfig("Multiplayer", "MultiplayerEnemyMinDamageTaken", 0.2f, "Minimum amount of damage that enemies can take from multiplayer scaling. 0.2 = 20%", advanced: true);
+            MultiplayerEnemyDamageModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyDamageModifier", 0.05f, "Additional damage enemies deal when players are grouped up. The bonus is (1 + extra players) * this value, so .05 with 3 extra players is +20%. Vanilla is 0.04.", true, 0, 2f);
+            MultiplayerEnemyHealthModifier = BindServerConfig("Multiplayer", "MultiplayerEnemyHealthModifier", 0.2f, "Damage RESISTANCE enemies gain per extra nearby player (this does not change their health, despite the name). .2 = 20% less damage taken per player. Vanilla is 0.3.", true, 0, 0.99f);
+            MultiplayerEnemyMinDamageTaken = BindServerConfig("Multiplayer", "MultiplayerEnemyMinDamageTaken", 0.2f, "Floor on the damage multiplier the group resistance above produces, so enemies never become immune. 0.2 = they always take at least 20% damage. Above 1 would invert the feature, so it is capped there.", advanced: true, valMin: 0.01f, valMax: 1f);
             MultiplayerScalingRequiredPlayersNearby = BindServerConfig("Multiplayer", "MultiplayerScalingRequiredPlayersNearby", 3, "The number of players in a local area required to cause monsters to gain bonus health and/or damage.", true, 1, 20);
-            EnableMultiplayerEnemyHealthScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyHealthScaling", true, "Creatures gain more health when players are grouped up.");
+            EnableMultiplayerEnemyHealthScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyHealthScaling", true, "Enemies take less damage when players are grouped up (the modifier below is damage resistance, not health).");
             EnableMultiplayerEnemyDamageScaling = BindServerConfig("Multiplayer", "EnableMultiplayerEnemyDamageScaling", false, "Creatures gain more damage when players are grouped up.");
             
             ControlSpawnerLevels = BindServerConfig("LevelSystem", "ControlSpawnerLevels", true, "Overrides spawner levels to be controlled by SLS (this impacts all naturally spawning creatures)");
@@ -482,7 +492,7 @@ namespace StarLevelSystem.common {
             ServerTimeBetweenRaidStartChecks = BindServerConfig("Raids", "ServerTimeBetweenRaidStartChecks", 25, "Number of minutes between when the server will check to start raids (raids can still be on cooldown and will not be started).", true, 1, 120);
             RaidCooldownClock = BindServerConfig("Raids", "RaidCooldownClock", RaidCooldownClockSource.WorldTime.ToString(), "Which clock raid cooldowns are measured against. WorldTime is the world's own time, which advances whenever anyone is playing the world and jumps forward when someone sleeps through a night, so a player's cooldown keeps burning down while other people play without them. PlayerTime is each player's own time in the world: a cooldown only counts down while that player is actually online, so logging out with 20 minutes left brings them back with 20 minutes left no matter how long they were away. Neither clock runs while nobody is playing. Switching between them re-bases everyone's remaining cooldown, so nobody gains or loses raid time by the switch.", new AcceptableValueList<string>(RaidCooldownClockSource.WorldTime.ToString(), RaidCooldownClockSource.PlayerTime.ToString()));
             RaidCooldownClock.SettingChanged += RaidControl.OnCooldownClockChanged;
-            MaxActiveRaids = BindServerConfig("Raids", "MaxActiveRaids", 10, "The maximum number of concurrent raids, automatically limited to 1 per player.");
+            MaxActiveRaids = BindServerConfig("Raids", "MaxActiveRaids", 10, "The maximum number of concurrent raids, automatically limited to 1 per player.", false, 1, 100);
             RaidWindDownSeconds = BindServerConfig("Raids", "RaidWindDownSeconds", 60, "Seconds after a raid ends during which its creatures move away and despawn naturally. 0 = no linger.", true, 0, 600);
             RaidForceDeleteStragglers = BindServerConfig("Raids", "RaidForceDeleteStragglers", true, "When enabled, any raid creatures still present at the end of RaidWindDownSeconds are force-deleted. When disabled, leftover creatures are left to wander off and despawn on their own.", advanced: true);
             EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.", advanced: true);
@@ -508,14 +518,14 @@ namespace StarLevelSystem.common {
             ZoneOverlayAboveFog.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayFogOnChange;
             MinZoneSize = BindServerConfig("ZoneScaling", "MinZoneSize", 1000f, "Minimum landmass size (meters, on both axes) for an island to be split into zones. Islands smaller than this get no zones. Changes apply when zones are rebuilt (sls-zone-rebuild).", false, 500f, 10000f);
             MaxZoneSize = BindServerConfig("ZoneScaling", "MaxZoneSize", 3000f, "Side length (meters) of each square zone cell. Land is tiled onto a global grid of this size so zones never overlap. Changes apply when zones are rebuilt (sls-zone-rebuild).", false, 1000f, 10000f);
-            KillReportFlushIntervalSeconds = BindServerConfig("ZoneScaling", "KillReportFlushIntervalSeconds", 10f, "The number of seconds between update checks for zone kill counters.", true);
+            KillReportFlushIntervalSeconds = BindServerConfig("ZoneScaling", "KillReportFlushIntervalSeconds", 10f, "The number of seconds between update checks for zone kill counters. Must stay above zero: WaitForSeconds(0) yields a single frame, turning the drain into a per-frame loop that also sends an RPC from every client.", true, 0.5f, 600f);
             ZoneOverlayColorOptions = BindServerConfig("ZoneScaling", "ZoneOverlayColorOptions", "Grey,White,LightYellow,Yellow,LightOrange,Orange,DarkOrange,LightRed,Red,DarkRed,LightPurple,Purple,DarkPurple", "The colors used for zone boundaries on the minimap, walked by zone level (higher levels step further along the list, wrapping if there are more levels than colors). (Optional, use an HTML hex color starting with # to have a custom color.) Available options: LightYellow, Yellow, LightOrange, Orange, DarkOrange, LightRed, Red, DarkRed, LightPurple, Purple, DarkPurple, Green, Teal, Blue, Pink, Gray, Brown, Black, White");
             ZoneOverlayColorOptions.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayColorsOnChange;
             ZoneOverlayColorTransparency = BindServerConfig("ZoneScaling", "ZoneOverlayColorTransparency", 0.5f, "Transparency value of the color used for zone boundaries.", true, 0f, 1f);
             ZoneOverlayColorTransparency.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayColorsOnChange;
 
-            MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.");
-            MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.");
+            MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.", false, 0, 20);
+            MaxMinorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMinorModifiersPerCreature", 1, "The default number of minor modifiers that a creature can have.", false, 0, 20);
             LimitCreatureModifiersToCreatureStarLevel = BindServerConfig("Modifiers", "LimitCreatureModifiersToCreatureStarLevel", true, "Limits the number of modifiers that a creature can have based on its level.");
             LimitCreatureModifiersToCreatureStarLevel.SettingChanged += CreatureModifiersData.ModifierNamingChanged;
             ChanceMajorModifier = BindServerConfig("Modifiers", "ChanceMajorModifier", 0.15f, "The chance that a creature will have a major modifier (creatures can have BOTH major and minor modifiers).", false, 0, 1f);
@@ -525,9 +535,9 @@ namespace StarLevelSystem.common {
             EnableBossModifiers = BindServerConfig("Modifiers", "EnableBossModifiers", true, "Bosses can spawn with modifiers.");
             ChanceOfBossModifier = BindServerConfig("Modifiers", "ChanceOfBossModifier", 0.75f, "The chance that a boss will have a modifier.", false, 0, 1f);
             ChanceOfBossModifier.SettingChanged += CreatureModifiersData.ClearProbabilityCaches;
-            MaxBossModifiersPerBoss = BindServerConfig("Modifiers", "MaxBossModifiersPerBoss", 2, "The maximum number of modifiers that a boss can have.");
+            MaxBossModifiersPerBoss = BindServerConfig("Modifiers", "MaxBossModifiersPerBoss", 2, "The maximum number of modifiers that a boss can have.", false, 0, 20);
             SplittersInheritLevel = BindServerConfig("Modifiers", "SplittersInheritLevel", true, "Creatures spawned from the Splitter modifier inherit the level of the parent creature.");
-            LimitCreatureModifierPrefixes = BindServerConfig("Modifiers", "LimitCreatureModifierPrefixes", 3, "Maximum number of prefix names to use when building a creatures name.");
+            LimitCreatureModifierPrefixes = BindServerConfig("Modifiers", "LimitCreatureModifierPrefixes", 3, "Maximum number of prefix names to use when building a creatures name.", false, 0, 20);
             LimitCreatureModifierPrefixes.SettingChanged += CreatureModifiersData.ModifierNamingChanged;
             MinorModifiersFirstInName = BindServerConfig("Modifiers", "MinorModifiersFirstInName", false, "Enables or disables ordering of modifiers for naming. If enabled, minor modifiers will be sorted first eg: Fast Poisonous");
             MinorModifiersFirstInName.SettingChanged += CreatureModifiersData.ModifierNamingChanged;
@@ -537,11 +547,15 @@ namespace StarLevelSystem.common {
             EvolvingCanRollNewModifiers = BindServerConfig("Modifiers", "EvolvingCanRollNewModifiers", false, "When enabled, evolving creatures have a chance to gain new modifiers when they evolve.");
             EvolvingChanceToRollNewModifier = BindServerConfig("Modifiers", "EvolvingChanceToRollNewModifier", 0.15f, "Chance that an evolving creature will gain a new major, minor, or boss modifier (based on creature type), up to the configured modifier limit.", false, 0f, 1f);
 
-            EnemyHealthbarScalarX = BindServerConfig("UI", "EnemyHealthbarScalarX", 1f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
-            EnemyHealthbarScalarY = BindServerConfig("UI", "EnemyHealthbarScalarY", 1.75f, "The scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0f, 4f);
+            EnemyHealthbarScalarX = BindServerConfig("UI", "EnemyHealthbarScalarX", 1f, "Horizontal scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0.1f, 4f);
+            EnemyHealthbarScalarX.SettingChanged += UIHudControl.OnEnemyHudConfigChanged;
+            EnemyHealthbarScalarY = BindServerConfig("UI", "EnemyHealthbarScalarY", 1.75f, "Vertical scale of the health bar for typical enemies. It also scales the health number, so zero would give a zero-sized font. This does not impact bosses or players.", false, 0.1f, 4f);
+            EnemyHealthbarScalarY.SettingChanged += UIHudControl.OnEnemyHudConfigChanged;
             UseCustomHealthFont = Config.Bind("UI", "UseCustomHealthFont", false, "[Client side Config] Enable to use a custom version of the Norse font.");
-            HealthDisplayFontSizeAdjustment = BindServerConfig("UI", "HealthDisplayFontSizeAdjustment", 0.8f, "Percentage modification for the font size on creature health.");
+            HealthDisplayFontSizeAdjustment = BindServerConfig("UI", "HealthDisplayFontSizeAdjustment", 0.8f, "Font size scale for the number on creature health bars, as a fraction: 0.8 means 80%. Not a percentage - 80 here would give a 640pt font.", false, 0.1f, 4f);
+            HealthDisplayFontSizeAdjustment.SettingChanged += UIHudControl.OnEnemyHudConfigChanged;
             EnableEnemyHealthbarNumberDisplay = BindServerConfig("UI", "EnableEnemyHealthbarNumberDisplay", false, "Enables a numerical display for enemy creatures health");
+            EnableEnemyHealthbarNumberDisplay.SettingChanged += UIHudControl.OnEnemyHudConfigChanged;
             StackMultipleBossHealthbars = BindServerConfig("UI", "StackMultipleBossHealthbars", true, "When more than one boss healthbar is shown, stack them vertically (one full bar per row). When disabled, the boss bars are squished horizontally so they sit side-by-side.");
             BossHealthbarSpacing = BindServerConfig("UI", "BossHealthbarSpacing", 30f, "Gap, in pixels, between boss healthbars (vertical gap when stacked, horizontal gap when squished).", true, 0f, 120f);
             BossHudTopBuffer = Config.Bind("UI", "BossHudTopBuffer", 120,
@@ -559,8 +573,8 @@ namespace StarLevelSystem.common {
 
             NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
             OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
-            InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.");
-            FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.");
+            InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.", true, 0f, 30f);
+            FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.", true, 1, 60);
             ConfigPollIntervalSeconds = BindServerConfig("Misc", "ConfigPollIntervalSeconds", 30f, "The number of seconds between checks for changes in the yaml config files.", true, 1f, 300f);
             // Read by ConfigChangeDebouncer. Most editors save by truncating and then writing, which the
             // watcher sees as two separate changes; this collapses them into one reload.
@@ -569,6 +583,18 @@ namespace StarLevelSystem.common {
 
             OnlyControlVanillaAreaSpawners = BindServerConfig("ModCompat", "OnlyControlVanillaAreaSpawners", true, "When enabled, will only control the spawned level from an AreaSpawner if it is a vanilla one.");
             OverrideCreatureModifiedHealth = BindServerConfig("ModCompat", "OverrideCreatureModifiedHealth", false, "When enabled, will always set creatures health based on the SLS settings for the creature. This overrides other mods changes to creatures.");
+        }
+
+        // Re-seed the watcher's stamp for the mod's own .cfg after deliberately writing to it.
+        //
+        // SaveOnConfigSet is on, so a batch of ConfigEntry assignments - the in-game editor writes about
+        // 25 in a row - rewrites the file that many times. The watcher then sees a change it caused
+        // itself and calls cfg.Reload(), re-raising SettingChanged for everything that moved. Not an
+        // infinite loop, but a self-inflicted reload storm. The yaml path has always done this through
+        // WriteRawToDisk; the .cfg had nothing.
+        internal static void RefreshOwnConfigStamp() {
+            if (cfg == null) { return; }
+            ConfigFileWatcher.RefreshStamp(cfg.ConfigFilePath);
         }
 
         // --- Empty-config fallback helpers ---

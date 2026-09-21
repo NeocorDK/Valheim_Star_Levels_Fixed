@@ -218,10 +218,24 @@ namespace StarLevelSystem.common {
             yield return null;
         }
 
+        // The bytes on disk are preferred because they are what the admin wrote: a round trip through the
+        // object model drops anything this version does not model and reformats the rest, so a client
+        // that re-serialized would end up with a file that no longer matches the server's.
+        //
+        // But only while those bytes are the ones the server is actually running. Under the default
+        // KeepLastGood policy a file that fails to parse leaves the server on its previous good values
+        // and the broken text still sitting on disk - and shipping that to every joining client meant
+        // each one failed the same parse and silently fell back to its OWN defaults, so server and
+        // clients disagreed about levels and loot with nothing to show for it. ReloadFromDisk already
+        // guards its broadcast this way; the initial-sync provider did not.
         private static ZPackage SendFileAsZPackage(YamlConfigFile file) {
             ZPackage package = new ZPackage();
             try {
-                package.Write(File.Exists(file.Path) ? File.ReadAllText(file.Path) : file.SerializeCurrent());
+                bool diskMatchesMemory = file.LastLoadFailed == false && File.Exists(file.Path);
+                package.Write(diskMatchesMemory ? File.ReadAllText(file.Path) : file.SerializeCurrent());
+                if (diskMatchesMemory == false && file.LastLoadFailed) {
+                    Logger.LogWarning($"{file.FileName} on disk does not parse; sending peers the values this server is actually running instead.");
+                }
             } catch (Exception e) {
                 Logger.LogError($"Could not read {file.FileName} to send to peers: {e.Message}");
                 package.Write("");

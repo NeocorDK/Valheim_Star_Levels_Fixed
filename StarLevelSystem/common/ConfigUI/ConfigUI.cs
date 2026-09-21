@@ -1,6 +1,7 @@
-using Jotunn.Managers;
+﻿using Jotunn.Managers;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -338,8 +339,17 @@ namespace StarLevelSystem.common {
 
         // --- Numbers ----------------------------------------------------------------------------------
 
+        // Invariant culture on both sides, deliberately. Unity's DecimalNumber content type accepts "."
+        // as a keystroke whatever the system locale is, so on a comma-decimal locale a typed 1.5 was
+        // parsed as a group separator and became 15 -- then silently clamped to the slider's maximum.
         internal static string Fmt(float v, bool whole) {
-            return whole ? ((int)Mathf.Round(v)).ToString() : v.ToString("0.00");
+            return whole
+                ? ((int)Mathf.Round(v)).ToString(CultureInfo.InvariantCulture)
+                : v.ToString("0.00", CultureInfo.InvariantCulture);
+        }
+
+        internal static bool TryParseValue(string text, out float value) {
+            return float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
         }
 
         // Jotunn has no CreateSlider, so this is hand-built out of the pieces Unity's Slider expects and
@@ -433,7 +443,7 @@ namespace StarLevelSystem.common {
             // Commit typed values on enter or focus loss: unparseable text snaps back to the slider, then
             // clamp, then normalise what is displayed.
             box.onEndEdit.AddListener(str => {
-                if (float.TryParse(str, out float v) == false) { v = slider.value; }
+                if (TryParseValue(str, out float v) == false) { v = slider.value; }
                 v = Mathf.Clamp(v, min, max);
                 if (wholeNumbers) { v = Mathf.Round(v); }
                 box.SetTextWithoutNotify(Fmt(v, wholeNumbers));

@@ -903,6 +903,10 @@ namespace StarLevelSystem.modules.UI {
             ValConfig.MaxActiveRaids.Value = staged.maxActiveRaids;
 
             ValConfig.EnableNemesisSystem.Value = staged.enableNemesis;
+
+            // Those assignments rewrote the .cfg once each. Tell the watcher this was us, or it reports
+            // the change back and triggers a reload plus a second round of SettingChanged handlers.
+            ValConfig.RefreshOwnConfigStamp();
         }
 
         // Through a deserialized copy, not the live object: the live settings can BE the shared static

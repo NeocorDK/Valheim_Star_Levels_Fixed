@@ -125,7 +125,15 @@ namespace StarLevelSystem.common {
 
             // The exact bytes that were validated, so what is on disk is what was judged -- and the
             // documented header survives, because this goes through WriteRawToDisk.
-            WriteRawToDisk(file, yaml);
+            //
+            // A failed write is reported rather than swallowed. The values are already live in memory at
+            // this point, so the caller is told what actually happened instead of being handed a success
+            // that will not survive a restart.
+            if (WriteRawToDisk(file, yaml) == false) {
+                message = $"{file.FileName} was applied but could not be written to disk; it will revert when the game restarts.";
+                ConfigNetwork.Broadcast(file);
+                return false;
+            }
 
             // Explicit, and required: WriteRawToDisk re-stamps the watcher so it will not see our own
             // write, which means the watcher-driven broadcast never fires for this path.
@@ -155,8 +163,12 @@ namespace StarLevelSystem.common {
         // The header is the only documentation of the schema an admin ever sees -- it is what tells them
         // which fields exist, what the enums accept and what the numbers mean. A bare write silently
         // deletes it and nobody notices until someone needs it.
-        internal static void WriteRawToDisk(YamlConfigFile file, string serializedYaml) {
-            if (file == null || string.IsNullOrEmpty(file.Path)) { return; }
+        // Returns whether the file actually reached the disk. Callers that report success to a person --
+        // ApplyEdited above, and through it the in-game editor -- have to know: a swallowed write left the
+        // values in memory, the peers and the file on disk all disagreeing while the admin was told it
+        // had been saved.
+        internal static bool WriteRawToDisk(YamlConfigFile file, string serializedYaml) {
+            if (file == null || string.IsNullOrEmpty(file.Path)) { return false; }
 
             try {
                 Directory.CreateDirectory(Path.GetDirectoryName(file.Path));
@@ -167,8 +179,10 @@ namespace StarLevelSystem.common {
                     writer.WriteLine(serializedYaml);
                 }
                 ConfigFileWatcher.RefreshStamp(file.Path);
+                return true;
             } catch (Exception e) {
                 Logger.LogError($"Could not write {file.FileName}: {e.Message}");
+                return false;
             }
         }
 

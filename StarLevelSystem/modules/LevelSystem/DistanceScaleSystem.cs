@@ -263,7 +263,9 @@ namespace StarLevelSystem.modules.LevelSystem {
                     for (int i = 0; i < granularity; i++) {
                         // Ensure we do not overwhelm the system and get the task killed
                         updates++;
-                        if (updates % 3_000 == 0) {
+                        // Through the config rather than a hardcoded 3000. MinimapRingPointsPerFrame
+                        // exists for exactly this budget and had no reader at all.
+                        if (updates % Mathf.Max(1, ValConfig.MinimapRingPointsPerFrame.Value) == 0) {
                             yield return new WaitForEndOfFrame();
                             // The world can be torn down while we're yielded here (TaskRunner is
                             // DontDestroyOnLoad, so this coroutine outlives the scene). Bail out
