@@ -1,4 +1,4 @@
-using HarmonyLib;
+﻿using HarmonyLib;
 using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
@@ -78,6 +78,7 @@ namespace StarLevelSystem.modules.UI {
         private static Text titleText;
         private static Text generatorPreviewText;
         private static Text tableWarnText;
+        private static Text messageText;
         private static GameObject backBtn;
         private static GameObject cancelBtn;
         private static GameObject nextBtn;
@@ -161,11 +162,10 @@ namespace StarLevelSystem.modules.UI {
 
         internal static void OpenPanel() {
             staged = StagedConfig.Snapshot();
-            // Create fresh UI, allows setting all of the current configs to reflect current reality
-            if (panel != null) {
-                UnityEngine.Object.Destroy(panel);
-                panel = null;
-            }
+            // Through ClosePanel so the widget references and any live edit-result subscription are torn
+            // down too. Escape and scene changes destroy the panel GameObject directly, which leaves
+            // those behind.
+            ClosePanel();
             try {
                 BuildPanel();
             } catch (Exception e) {
@@ -178,6 +178,14 @@ namespace StarLevelSystem.modules.UI {
         }
 
         private static void ClosePanel() {
+            // Unhook first: the panel can also be destroyed by Escape or by a scene change, and a
+            // subscription that outlives the window would write into destroyed Text components.
+            UnhookEditResults();
+            pendingRemoteEdits.Clear();
+            messageText = null;
+            generatorPreviewText = null;
+            tableWarnText = null;
+            titleText = null;
             if (panel != null) {
                 UnityEngine.Object.Destroy(panel);
                 panel = null;
@@ -210,6 +218,10 @@ namespace StarLevelSystem.modules.UI {
             BuildNemesisPage(pageRoots[4].transform);
 
             float navY = PanelH - 56f;
+            // Status line between the nav buttons. ConfigUI.SetMessages exists for exactly this and had
+            // no caller, which is why a refused save produced nothing an admin could see.
+            messageText = ConfigUI.AddText(panel.transform, Margin + 300f, navY + 4f,
+                PanelW - 2 * Margin - 490f, RowHeight, "", 13, TextAnchor.MiddleCenter, new Color(1f, 0.6f, 0.4f));
             backBtn = ConfigUI.AddButton(panel.transform, Margin, navY, 130f, "< Back", () => ShowPage(currentPage - 1));
             cancelBtn = ConfigUI.AddButton(panel.transform, Margin + 150f, navY, 130f, "Cancel", ClosePanel);
             nextBtn = ConfigUI.AddButton(panel.transform, PanelW - Margin - 170f, navY, 170f, "Next >", () => ShowPage(currentPage + 1));
@@ -714,152 +726,259 @@ namespace StarLevelSystem.modules.UI {
         //  Apply
         // ------------------------------------------------------------------------------------------------
 
+        // A yaml document the panel wants to save, paired with the file it belongs to.
+        private readonly struct PendingEdit {
+            internal readonly YamlConfigFile File;
+            internal readonly string Yaml;
+            internal PendingEdit(YamlConfigFile file, string yaml) { File = file; Yaml = yaml; }
+        }
+
+        // Files sent to the server whose answer has not arrived yet, and everything that went wrong in
+        // the current save attempt.
+        private static readonly HashSet<string> pendingRemoteEdits = new HashSet<string>();
+        private static readonly List<string> applyErrors = new List<string>();
+        private static bool editResultsHooked;
+
+        private static void SetMessage(string text) {
+            if (messageText != null) { messageText.text = text ?? ""; }
+        }
+
         private static void ApplyAndSave() {
+            applyErrors.Clear();
+            pendingRemoteEdits.Clear();
+            SetMessage("");
+
             try {
-                ValConfig.EnableDistanceLevelScalingBonus.Value = staged.enableDistance;
-                ValConfig.EnableMapRingsForDistanceBonus.Value = staged.enableDistanceOverlay;
-                ValConfig.EnableZoneScalingBonus.Value = staged.enableZone;
-                ValConfig.EnableZoneMapOverlay.Value = staged.enableZoneOverlay;
+                bool isOwner = ZNet.instance == null || ZNet.instance.IsServer();
 
-                ValConfig.EnemyHealthMultiplier.Value = staged.creatureHpPerLevel;
-                ValConfig.EnemyDamageLevelMultiplier.Value = staged.creatureDmgPerLevel;
-                ValConfig.BossEnemyHealthMultiplier.Value = staged.bossHpPerLevel;
-                ValConfig.BossEnemyDamageMultiplier.Value = staged.bossDmgPerLevel;
-                ValConfig.MaxLevel.Value = staged.maxLevel;
-                ValConfig.MaxBossLevel.Value = staged.maxBossLevel;
+                // Every document is built first and nothing is written until all of them are known to be
+                // good. Writing the ~25 ConfigEntry values up front, as this used to, fired their
+                // SettingChanged handlers immediately - so a yaml file rejected afterwards left half the
+                // configuration applied and live with nothing to roll it back.
+                List<PendingEdit> edits = new List<PendingEdit>();
+                BuildLevelEdit(edits);
+                BuildModifierEdit(edits);
+                BuildRaidEdit(edits);
+                BuildNemesisEdit(edits);
 
-                ValConfig.EnableMultiplayerEnemyHealthScaling.Value = staged.mpHealth;
-                ValConfig.MultiplayerEnemyHealthModifier.Value = staged.mpHealthMod;
-                ValConfig.EnableMultiplayerEnemyDamageScaling.Value = staged.mpDamage;
-                ValConfig.MultiplayerEnemyDamageModifier.Value = staged.mpDamageMod;
-                ValConfig.MultiplayerScalingRequiredPlayersNearby.Value = staged.mpRequiredPlayers;
-
-                ValConfig.MaxMajorModifiersPerCreature.Value = staged.maxMajor;
-                ValConfig.MaxMinorModifiersPerCreature.Value = staged.maxMinor;
-                ValConfig.ChanceMajorModifier.Value = staged.chanceMajor;
-                ValConfig.ChanceMinorModifier.Value = staged.chanceMinor;
-                ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value = staged.limitToStarLevel;
-                ValConfig.EnableBossModifiers.Value = staged.enableBossMods;
-                ValConfig.ChanceOfBossModifier.Value = staged.chanceBoss;
-                ValConfig.MaxBossModifiersPerBoss.Value = staged.maxBossMods;
-                ValConfig.LimitCreatureModifierPrefixes.Value = staged.prefixLimit;
-                ValConfig.MinorModifiersFirstInName.Value = staged.minorFirst;
-                ValConfig.ModifierIconDisplayStyle.Value = staged.displayStyle.ToString();
-
-                // Write out the level settings.
-                //
-                // Through a deserialized copy, not the live object: SLE_Level_Settings can BE the shared
-                // static default (LevelSystemData re-points it there whenever a parse fails), so mutating
-                // it in place would corrupt the defaults for the rest of the session. Raids and nemesis
-                // below already did this; levels and modifiers did not.
-                CreatureLevelSettings levelSource = LevelSystemData.AuthoredLevelSettings ?? LevelSystemData.SLE_Level_Settings;
-                if (levelSource != null) {
-                    // From the authored settings, not the live ones: SLE_Level_Settings has had any
-                    // generator already expanded over its chance tables, so serializing that would write
-                    // the machine-generated curve back as if the admin had typed it.
-                    CreatureLevelSettings settings = DataObjects.yamlDeserializer.Deserialize<CreatureLevelSettings>(
-                        DataObjects.yamlSerializer.Serialize(levelSource));
-                    settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
-                    if (staged.useGenerator) {
-                        // Edit entry zero in place. This list is a real list of per-prefab generators and
-                        // the panel only ever shows the first; replacing the whole list deleted every
-                        // other entry an admin had hand-authored.
-                        if (settings.DefaultLevelupGenerators == null || settings.DefaultLevelupGenerators.Count == 0) {
-                            settings.DefaultLevelupGenerators = new List<LevelGenerator> { staged.generator };
-                        } else {
-                            settings.DefaultLevelupGenerators[0] = staged.generator;
+                if (isOwner) {
+                    foreach (PendingEdit edit in edits) {
+                        ValidationReport report = edit.File.DryRun(edit.Yaml, out string parseError);
+                        if (parseError != null) {
+                            applyErrors.Add($"{edit.File.FileName}: {parseError}");
+                        } else if (report != null && report.HasErrors) {
+                            applyErrors.Add($"{edit.File.FileName}: {string.Join(" ", report.Errors.ToArray())}");
                         }
-                    } else {
-                        // Switched off: drop the generators so the authored DefaultCreatureLevelUpChance
-                        // is what takes effect again.
-                        settings.DefaultLevelupGenerators = null;
                     }
-                    string yaml = DataObjects.yamlSerializer.Serialize(settings);
-                    // Through ValConfig rather than File.WriteAllText: a bare write drops the documented
-                    // header block, which is the only in-file explanation these settings have.
-                    // One call: validate, apply, write with the header intact, broadcast. It refuses and
-                    // reports rather than half-writing, which the old three-step sequence could not do.
-                    if (YamlConfigManager.ApplyEdited(YamlConfigManager.LevelSettings, yaml, out string levelMessage) == false) {
-                        Logger.LogWarning($"Level settings were not saved: {levelMessage}");
+                    if (applyErrors.Count > 0) {
+                        ReportFailure("Nothing was saved");
+                        return;
                     }
                 }
 
-                // Persist modifier enable/disable changes (only if a toggle actually changed, so we don't
-                // rewrite the modifier YAML when the user only touched the sliders). Disabled modifiers keep
-                // their config in the file and are simply marked Enabled = false.
-                if (ModifiersChanged()) {
-                    // Deserialized copy, same reason as the level settings above.
-                    CreatureModifierCollection src = DataObjects.yamlDeserializer.Deserialize<CreatureModifierCollection>(
-                        DataObjects.yamlSerializer.Serialize(staged.modifierSource));
-                    ApplyEnabledFlags(src.BossModifiers, staged.modifierOn[ModifierType.Boss]);
-                    ApplyEnabledFlags(src.MajorModifiers, staged.modifierOn[ModifierType.Major]);
-                    ApplyEnabledFlags(src.MinorModifiers, staged.modifierOn[ModifierType.Minor]);
-                    string modifiersYaml = DataObjects.yamlSerializer.Serialize(src);
-                    // ClearProbabilityCaches is part of the Apply hook now, so it happens on every route
-                    // rather than only when saving from this panel.
-                    if (YamlConfigManager.ApplyEdited(YamlConfigManager.ModifierSettings, modifiersYaml, out string modifierMessage) == false) {
-                        Logger.LogWarning($"Modifier settings were not saved: {modifierMessage}");
+                WriteConfigEntries();
+
+                if (isOwner) {
+                    foreach (PendingEdit edit in edits) {
+                        if (YamlConfigManager.ApplyEdited(edit.File, edit.Yaml, out string message) == false) {
+                            applyErrors.Add($"{edit.File.FileName}: {message}");
+                        }
                     }
+                    if (applyErrors.Count > 0) {
+                        ReportFailure("Some settings were not saved");
+                        return;
+                    }
+                    Logger.LogInfo("QuickConfigureTool applied and saved configuration.");
+                    ClosePanel();
+                    return;
                 }
 
-                // Raids - plain BepInEx ConfigEntries; "Enable SLS Raids" is the inverse of vanilla raids.
-                ValConfig.UseVanillaRaidConfiguration.Value = !staged.enableSlsRaids;
-                ValConfig.RaidEventRate.Value = staged.raidEventRate;
-                ValConfig.ServerTimeBetweenRaidStartChecks.Value = staged.raidCheckMinutes;
-                ValConfig.MaxRaidAttemptsPerPlayer.Value = staged.maxRaidAttempts;
-                ValConfig.MaxActiveRaids.Value = staged.maxActiveRaids;
-
-                // Per-raid enable/disable lives in the RaidSettings YAML (RaidDefinition.Enabled). Only rewrite
-                // when a toggle actually changed; work on a deserialized copy so the live config isn't mutated
-                // in place (all other per-raid settings are preserved).
-                if (RaidsChanged()) {
-                    RaidConfiguration raidCFG = DataObjects.yamlDeserializer.Deserialize<RaidConfiguration>(
-                        DataObjects.yamlSerializer.Serialize(staged.raidSource));
-                    foreach (RaidDefinition raid in raidCFG.Raids) {
-                        raid.Enabled = staged.raidsOn.Contains(raid.Name);
-                    }
-                    string raidYaml = DataObjects.yamlSerializer.Serialize(raidCFG);
-                    if (YamlConfigManager.ApplyEdited(YamlConfigManager.RaidSettings, raidYaml, out string raidMessage) == false) {
-                        Logger.LogWarning($"Raid settings were not saved: {raidMessage}");
-                    }
-                }
-
-                // Nemesis - enable flag is a ConfigEntry; the rest is in the NemesisSettings YAML.
-                ValConfig.EnableNemesisSystem.Value = staged.enableNemesis;
-                if (NemesisChanged()) {
-                    // Work on a deserialized copy so the shared default/live instance is never mutated in place
-                    // (and all other YAML sections + NemesisVersion are preserved).
-                    NemesisConfiguration nemesisCFG = DataObjects.yamlDeserializer.Deserialize<NemesisConfiguration>(
-                        DataObjects.yamlSerializer.Serialize(staged.nemesisSource));
-                    nemesisCFG.NemesisActionCooldownSeconds = staged.nemCooldown;
-                    nemesisCFG.NemesisInfluenceRadius = staged.nemInfluence;
-                    nemesisCFG.NemesisMinSpawnDistance = staged.nemMinSpawn;
-                    if (nemesisCFG.ScoreSystem == null) { nemesisCFG.ScoreSystem = new NemesisScore(); }
-                    nemesisCFG.ScoreSystem.NeutralScore = staged.neutralScore;
-                    nemesisCFG.ScoreSystem.MinScore = staged.minScore;
-                    nemesisCFG.ScoreSystem.MaxScore = staged.maxScore;
-                    nemesisCFG.ScoreSystem.DecayPerUpdate = staged.decayPerUpdate;
-                    nemesisCFG.ScoreSystem.ScoreIntervalSeconds = staged.scoreInterval;
-                    nemesisCFG.ScoreSystem.BossKillBonus = staged.bossKillBonus;
-                    nemesisCFG.ScoreSystem.DeathScoreReduction = staged.deathReduction;
-                    string nemesisYaml = DataObjects.yamlSerializer.Serialize(nemesisCFG);
-                    if (YamlConfigManager.ApplyEdited(YamlConfigManager.NemesisSettings, nemesisYaml, out string nemesisMessage) == false) {
-                        Logger.LogWarning($"Nemesis settings were not saved: {nemesisMessage}");
-                    }
-                }
-
-                // A remote admin's ConfigEntry writes above are local-only until Jotunn is told to push
-                // them. On a host this is a no-op.
+                // Off-host the server owns these files, so they go up for validation there instead of
+                // being written locally. ApplyEdited refuses on any non-server machine, and this panel
+                // used to log that refusal and close anyway - so a remote admin's modifier, raid and
+                // nemesis edits vanished while the window behaved exactly as though they had been saved.
                 PushRemoteConfigChanges();
-
-                Logger.LogInfo("QuickConfigureTool applied and saved configuration.");
+                HookEditResults();
+                foreach (PendingEdit edit in edits) {
+                    if (ConfigNetwork.RequestEdit(edit.File, edit.Yaml, out string refusal)) {
+                        pendingRemoteEdits.Add(edit.File.FileName);
+                    } else {
+                        applyErrors.Add($"{edit.File.FileName}: {refusal}");
+                    }
+                }
+                if (pendingRemoteEdits.Count > 0) {
+                    SetMessage($"Sent to the server, waiting for {pendingRemoteEdits.Count} file(s)...");
+                    return;
+                }
+                if (applyErrors.Count > 0) {
+                    ReportFailure("Nothing was saved");
+                    return;
+                }
+                Logger.LogInfo("QuickConfigureTool applied configuration.");
                 ClosePanel();
             } catch (Exception e) {
                 // ClosePanel is deliberately NOT in a finally: a mid-apply failure leaves configuration
                 // half-written, and closing the window over it is how an admin ends up believing the save
                 // landed. Leave the panel up with their edits intact.
+                SetMessage("Save failed - see the log for details.");
                 Logger.LogWarning($"QuickConfigureTool failed to apply configuration: {e}");
             }
+        }
+
+        private static void ReportFailure(string headline) {
+            string detail = string.Join("   ", applyErrors.ToArray());
+            SetMessage($"{headline}: {detail}");
+            Logger.LogWarning($"QuickConfigureTool - {headline}: {detail}");
+        }
+
+        private static void HookEditResults() {
+            if (editResultsHooked) { return; }
+            editResultsHooked = true;
+            ConfigNetwork.EditResult += OnRemoteEditResult;
+        }
+
+        private static void UnhookEditResults() {
+            if (editResultsHooked == false) { return; }
+            editResultsHooked = false;
+            ConfigNetwork.EditResult -= OnRemoteEditResult;
+        }
+
+        // The server's verdict on one uploaded file. The panel stays open until every file it sent has
+        // been answered, so a refusal is visible rather than inferred from the log.
+        private static void OnRemoteEditResult(YamlConfigFile file, bool accepted, string message) {
+            if (file == null) { return; }
+            pendingRemoteEdits.Remove(file.FileName);
+            if (accepted == false) {
+                applyErrors.Add($"{file.FileName}: {message}");
+                Logger.LogWarning($"The server refused {file.FileName}: {message}");
+            }
+            if (pendingRemoteEdits.Count > 0) {
+                SetMessage($"Waiting for the server ({pendingRemoteEdits.Count} file(s) left)...");
+                return;
+            }
+            if (applyErrors.Count > 0) {
+                ReportFailure("The server refused some settings");
+                return;
+            }
+            Logger.LogInfo("The server accepted the configuration.");
+            ClosePanel();
+        }
+
+        private static void WriteConfigEntries() {
+            ValConfig.EnableDistanceLevelScalingBonus.Value = staged.enableDistance;
+            ValConfig.EnableMapRingsForDistanceBonus.Value = staged.enableDistanceOverlay;
+            ValConfig.EnableZoneScalingBonus.Value = staged.enableZone;
+            ValConfig.EnableZoneMapOverlay.Value = staged.enableZoneOverlay;
+
+            ValConfig.EnemyHealthMultiplier.Value = staged.creatureHpPerLevel;
+            ValConfig.EnemyDamageLevelMultiplier.Value = staged.creatureDmgPerLevel;
+            ValConfig.BossEnemyHealthMultiplier.Value = staged.bossHpPerLevel;
+            ValConfig.BossEnemyDamageMultiplier.Value = staged.bossDmgPerLevel;
+            ValConfig.MaxLevel.Value = staged.maxLevel;
+            ValConfig.MaxBossLevel.Value = staged.maxBossLevel;
+
+            ValConfig.EnableMultiplayerEnemyHealthScaling.Value = staged.mpHealth;
+            ValConfig.MultiplayerEnemyHealthModifier.Value = staged.mpHealthMod;
+            ValConfig.EnableMultiplayerEnemyDamageScaling.Value = staged.mpDamage;
+            ValConfig.MultiplayerEnemyDamageModifier.Value = staged.mpDamageMod;
+            ValConfig.MultiplayerScalingRequiredPlayersNearby.Value = staged.mpRequiredPlayers;
+
+            ValConfig.MaxMajorModifiersPerCreature.Value = staged.maxMajor;
+            ValConfig.MaxMinorModifiersPerCreature.Value = staged.maxMinor;
+            ValConfig.ChanceMajorModifier.Value = staged.chanceMajor;
+            ValConfig.ChanceMinorModifier.Value = staged.chanceMinor;
+            ValConfig.LimitCreatureModifiersToCreatureStarLevel.Value = staged.limitToStarLevel;
+            ValConfig.EnableBossModifiers.Value = staged.enableBossMods;
+            ValConfig.ChanceOfBossModifier.Value = staged.chanceBoss;
+            ValConfig.MaxBossModifiersPerBoss.Value = staged.maxBossMods;
+            ValConfig.LimitCreatureModifierPrefixes.Value = staged.prefixLimit;
+            ValConfig.MinorModifiersFirstInName.Value = staged.minorFirst;
+            ValConfig.ModifierIconDisplayStyle.Value = staged.displayStyle.ToString();
+
+            // "Enable SLS Raids" is the inverse of vanilla raids.
+            ValConfig.UseVanillaRaidConfiguration.Value = !staged.enableSlsRaids;
+            ValConfig.RaidEventRate.Value = staged.raidEventRate;
+            ValConfig.ServerTimeBetweenRaidStartChecks.Value = staged.raidCheckMinutes;
+            ValConfig.MaxRaidAttemptsPerPlayer.Value = staged.maxRaidAttempts;
+            ValConfig.MaxActiveRaids.Value = staged.maxActiveRaids;
+
+            ValConfig.EnableNemesisSystem.Value = staged.enableNemesis;
+        }
+
+        // Through a deserialized copy, not the live object: the live settings can BE the shared static
+        // default (LevelSystemData re-points there whenever a parse fails), so mutating in place would
+        // corrupt the defaults for the rest of the session.
+        private static void BuildLevelEdit(List<PendingEdit> edits) {
+            // From the authored settings, not the live ones: SLE_Level_Settings has had any generator
+            // already expanded over its chance tables, so serializing that would write the
+            // machine-generated curve back as if the admin had typed it.
+            CreatureLevelSettings levelSource = LevelSystemData.AuthoredLevelSettings ?? LevelSystemData.SLE_Level_Settings;
+            if (levelSource == null) {
+                applyErrors.Add("level settings are not loaded");
+                return;
+            }
+            CreatureLevelSettings settings = DataObjects.yamlDeserializer.Deserialize<CreatureLevelSettings>(
+                DataObjects.yamlSerializer.Serialize(levelSource));
+            settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
+            if (staged.useGenerator) {
+                // Edit entry zero in place. This is a real list of per-prefab generators and the panel
+                // only ever shows the first; replacing the list deleted every other entry an admin had
+                // hand-authored.
+                if (settings.DefaultLevelupGenerators == null || settings.DefaultLevelupGenerators.Count == 0) {
+                    settings.DefaultLevelupGenerators = new List<LevelGenerator> { staged.generator };
+                } else {
+                    settings.DefaultLevelupGenerators[0] = staged.generator;
+                }
+            } else {
+                // Switched off: drop the generators so the authored DefaultCreatureLevelUpChance takes
+                // effect again.
+                settings.DefaultLevelupGenerators = null;
+            }
+            // Through ApplyEdited rather than File.WriteAllText: a bare write drops the documented header
+            // block, which is the only in-file explanation these settings have.
+            edits.Add(new PendingEdit(YamlConfigManager.LevelSettings, DataObjects.yamlSerializer.Serialize(settings)));
+        }
+
+        // Only when a toggle actually changed, so touching the sliders alone does not rewrite the file.
+        // Disabled modifiers keep their config and are simply marked Enabled = false.
+        private static void BuildModifierEdit(List<PendingEdit> edits) {
+            if (ModifiersChanged() == false) { return; }
+            CreatureModifierCollection src = DataObjects.yamlDeserializer.Deserialize<CreatureModifierCollection>(
+                DataObjects.yamlSerializer.Serialize(staged.modifierSource));
+            ApplyEnabledFlags(src.BossModifiers, staged.modifierOn[ModifierType.Boss]);
+            ApplyEnabledFlags(src.MajorModifiers, staged.modifierOn[ModifierType.Major]);
+            ApplyEnabledFlags(src.MinorModifiers, staged.modifierOn[ModifierType.Minor]);
+            edits.Add(new PendingEdit(YamlConfigManager.ModifierSettings, DataObjects.yamlSerializer.Serialize(src)));
+        }
+
+        // Per-raid enable/disable lives in RaidDefinition.Enabled; every other per-raid setting is
+        // preserved by copying the whole document.
+        private static void BuildRaidEdit(List<PendingEdit> edits) {
+            if (RaidsChanged() == false) { return; }
+            RaidConfiguration raidCFG = DataObjects.yamlDeserializer.Deserialize<RaidConfiguration>(
+                DataObjects.yamlSerializer.Serialize(staged.raidSource));
+            foreach (RaidDefinition raid in raidCFG.Raids) {
+                raid.Enabled = staged.raidsOn.Contains(raid.Name);
+            }
+            edits.Add(new PendingEdit(YamlConfigManager.RaidSettings, DataObjects.yamlSerializer.Serialize(raidCFG)));
+        }
+
+        private static void BuildNemesisEdit(List<PendingEdit> edits) {
+            if (NemesisChanged() == false) { return; }
+            NemesisConfiguration nemesisCFG = DataObjects.yamlDeserializer.Deserialize<NemesisConfiguration>(
+                DataObjects.yamlSerializer.Serialize(staged.nemesisSource));
+            nemesisCFG.NemesisActionCooldownSeconds = staged.nemCooldown;
+            nemesisCFG.NemesisInfluenceRadius = staged.nemInfluence;
+            nemesisCFG.NemesisMinSpawnDistance = staged.nemMinSpawn;
+            if (nemesisCFG.ScoreSystem == null) { nemesisCFG.ScoreSystem = new NemesisScore(); }
+            nemesisCFG.ScoreSystem.NeutralScore = staged.neutralScore;
+            nemesisCFG.ScoreSystem.MinScore = staged.minScore;
+            nemesisCFG.ScoreSystem.MaxScore = staged.maxScore;
+            nemesisCFG.ScoreSystem.DecayPerUpdate = staged.decayPerUpdate;
+            nemesisCFG.ScoreSystem.ScoreIntervalSeconds = staged.scoreInterval;
+            nemesisCFG.ScoreSystem.BossKillBonus = staged.bossKillBonus;
+            nemesisCFG.ScoreSystem.DeathScoreReduction = staged.deathReduction;
+            edits.Add(new PendingEdit(YamlConfigManager.NemesisSettings, DataObjects.yamlSerializer.Serialize(nemesisCFG)));
         }
 
         // True if any modifier's staged enable state differs from its current Enabled flag.
