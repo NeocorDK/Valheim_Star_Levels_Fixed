@@ -1,3 +1,36 @@
+﻿**1.11.0**
+ ---
+ ```
+- Fixed the in-game config panel leaking keystrokes into the game - typing a number in any field used to walk your character around and fire hotkeys
+- Escape now closes the config panel, and it has a close button. Previously Escape opened the pause menu on top of it and Cancel was the only way out
+- Opening the panel and pressing Apply & Save no longer rewrites the level curve. It used to invent a level generator and overwrite the hand-authored DefaultCreatureLevelUpChance, making level 8 creatures ~7x more common and level 10 ~13x, with no way back. The generator is now a toggle you opt into
+- Fixed the Gaussian curve style ignoring its level-up chance. A configured chance of 0 still levelled up 96% of creatures; the slider was really driving the width of the bell. Width moved to a new GaussianSpread field
+- Fixed the Table curve style collapsing every creature to a single level when no weight table matched the generator's span - which was every span the panel's sliders produced. It now falls back to the Exponential curve and logs what to add
+- The level generator rows now show what the curve actually produces, and warn when a Table shape is missing
+- A remote admin's config changes are no longer discarded in silence. Level, modifier, raid and nemesis edits are sent to the server for validation, and the panel reports the verdict instead of closing as though it had saved
+- Saving now validates everything before writing anything, so a rejected file no longer leaves half the settings applied
+- Fixed the conditional (defeated-boss) level tiers being unreachable. The shipped Meadows tier runs 6..30 while the biome caps at 4, so every Meadows creature came out at exactly level 6. A conditional generator now replaces the biome's level bounds as well as its curve, as documented
+- Conditional tiers now update when a boss is defeated. On a dedicated server they never did, for the lifetime of the process
+- The 'All' biome fallback inside a conditional block now works
+- Fixed zone scaling being inverted: any ZoneLevelBonusPerLevel below 1 made creatures in a levelled zone weaker instead of stronger
+- Fixed tame breeding - a level 2 parent could only produce level 1 children, randomized levels did not survive a relog, and breeding after any config reload threw
+- Fixed the level cap being applied inconsistently, which rebuilt creatures sitting legitimately at their cap on every config change
+- Fixed a crash on a Colorization.yaml that omits DefaultLevelColorization, which then ran the whole session with no colour table
+- A server whose config file fails to parse no longer sends that broken file to joining clients, which silently fell back to their own defaults and disagreed with the server about levels and loot
+- RaidSpawnEntry.LevelMin is now honoured - the Hildir raid asked for level 25 skeletons and spawned level 1 ones
+- A misspelled Faction in RaidSettings.yaml no longer produces raid creatures on the player's own side that cannot attack or be hit
+- Zone kill counts no longer include players, tames, training dummies, or the same kill counted once per peer
+- Eighteen settings silently inherited a 0-150 range and now carry ranges that match what they mean. KillReportFlushIntervalSeconds of 0 turned a background task into a per-frame loop
+- Number fields in the config panel now parse correctly on locales that use a comma decimal separator, where typing 1.5 was read as 15
+- Settings whose descriptions contradicted the code are corrected, including the health multipliers (flat, not per level - the boss default of 0.3 gives a boss 30% of its vanilla health) and MultiplayerEnemyHealthModifier (damage resistance, not health)
+- MaxBossLevel, EnableCreatureScalingPerLevel and the enemy healthbar settings now take effect without a reload
+ ```
+
+ BREAKING: two settings that were never read have been renamed now that they work.
+ `EnemyHealthPerWorldLevel` is now `EnemyHealthMultiplierPerWorldLevel` (default 2, matching vanilla),
+ and `MiniMapRingGeneratorUpdatesPerFrame` is now `MinimapRingPointsPerFrame` (default 3000). The old
+ keys are ignored and can be deleted from your .cfg.
+
 **1.10.2**
  ---
  ```

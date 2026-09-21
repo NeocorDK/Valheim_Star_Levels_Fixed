@@ -1,4 +1,4 @@
-using Jotunn.Managers;
+﻿using Jotunn.Managers;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules;
 using System.Collections.Generic;
@@ -41,8 +41,9 @@ namespace StarLevelSystem.common {
                 Header = ColorSettingsHeader,
                 Defaults = () => Colorization.defaultColorizationSettings,
                 Apply = Colorization.ApplyLoaded,
-                // Colours are cosmetic and the merge-in of missing default keys makes a partial file
-                // workable, so a broken edit reverting to built-ins matches how this behaved before.
+                // Colours are cosmetic, and the apply hook fills in any star the file leaves out from
+                // the built-in table, so a partial file is workable. A broken edit reverting to
+                // built-ins therefore matches how this behaved before.
                 OnFailure = ConfigFailurePolicy.RevertToDefaults,
                 AllowAdminEdit = true,
             });
@@ -202,9 +203,10 @@ namespace StarLevelSystem.common {
 # generators with different MinLevel/MaxLevel ranges (e.g. one per biome, each
 # shifted further out) share one authored shape as long as their span matches -
 # exactly what a ConditionalCreatureLevelupChance progression typically needs.
-# If a generator's span has no matching entry here, it falls back to a flat
-# chance at MinLevel and logs a warning - so keep an entry for every span you
-# actually use.
+# If a generator's span has no matching entry here - or the entry is shorter
+# than the span - it falls back to the Exponential curve and logs what to add,
+# so keep an entry for every span you actually use. Thresholds must descend;
+# an entry that rises is clamped so it does, with a warning naming the level.
 #
 #   LevelupWeightTablesBySpan:
 #     4: { 1: 30, 2: 15,   3: 5,      4: 0.01 }
@@ -218,8 +220,11 @@ namespace StarLevelSystem.common {
 #       LevelupCalculationStyle: Table
 #
 # ConditionalCreatureLevelupChance switches biome curves as world bosses fall:
-# defeated-boss global key -> biome -> generator. The highest defeated tier
-# listed applies; 'All' inside an entry is that entry's fallback biome.
+# defeated-boss global key -> biome -> generator. The FIRST entry whose key the
+# world has set applies, so author them highest tier first. 'All' inside an
+# entry is that entry's fallback biome, and the generator replaces that biome's
+# Min/Max level bounds as well as its curve - so a conditional tier can raise
+# creatures above the biome's own BiomeMaxLevelOverride.
 #################################################";
 
         private const string ColorSettingsHeader = @"#################################################
@@ -460,8 +465,9 @@ namespace StarLevelSystem.common {
 # are doing too well. Needs EnableNemesisSystem in the main .cfg. Server
 # authoritative; edits apply live.
 #
-# DO NOT edit NemesisVersion: a version that does not match this build resets
-# the whole file to the defaults on load.
+# DO NOT edit NemesisVersion. A version this build can migrate is migrated in
+# place; one it cannot is refused, and the server keeps running on the last
+# values that loaded cleanly. The file itself is left exactly as you wrote it.
 #
 # NOTE: AvailableMiniBosses is written by the SERVER at runtime - minibosses
 # created from player killers are added and spawned ones are removed, and the

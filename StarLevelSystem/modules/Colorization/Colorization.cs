@@ -61,10 +61,15 @@ namespace StarLevelSystem.modules
         // whatever produced them.
         internal static void ApplyLoaded(DataObjects.CreatureColorizationSettings parsed) {
             {
-                creatureColorizationSettings = parsed;
-                // Ensure that we load the default colorization settings, maybe we consider a merge here instead?
+                creatureColorizationSettings = parsed ?? defaultColorizationSettings;
+                // A file that omits DefaultLevelColorization entirely deserializes it as null, and this
+                // merge then threw. The exception was swallowed by the apply hook's catch, but the broken
+                // object had already been assigned on the line above, so the rest of the session ran with
+                // a null colour table. The file header promises a partial file is fine; this is what
+                // makes that true.
+                creatureColorizationSettings.DefaultLevelColorization ??= new Dictionary<int, ColorDef>();
                 foreach (var entry in defaultColorizationSettings.DefaultLevelColorization) {
-                    if (!creatureColorizationSettings.DefaultLevelColorization.Keys.Contains(entry.Key)) {
+                    if (!creatureColorizationSettings.DefaultLevelColorization.ContainsKey(entry.Key)) {
                         creatureColorizationSettings.DefaultLevelColorization.Add(entry.Key, entry.Value);
                     }
                 }

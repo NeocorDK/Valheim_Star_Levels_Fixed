@@ -369,7 +369,7 @@ namespace StarLevelSystem.common
             public LevelupCalculationStyle LevelupCalculationStyle { get; set; } = LevelupCalculationStyle.Linear;
             [DefaultValue(0f)]
             public float GaussianOffset { get; set; } = 0f;
-            [Description("Gaussian style only: width of the bell, 0.05 (one narrow spike) to 1 (nearly flat). Separate from LevelUpChance, which means the same thing in every style.")]
+            [Description("Gaussian style only: width of the bell, 0.05 (one narrow spike) to 1 (nearly flat). Separate from LevelUpChance, which controls the chance to level up at all and means the same thing in every style.")]
             [DefaultValue(0.5f)]
             public float GaussianSpread { get; set; } = 0.5f;
 
@@ -557,7 +557,7 @@ namespace StarLevelSystem.common
             [Description("Enables boss-reactive, biome-specific levelup chances based on the world's defeated bosses (global keys).")]
             public bool EnableConditionalCreatureLevelupChance { get; set; } = false;
 
-            [Description("Defeated-boss global key -> biome -> level generator. Highest tier (bottom-most listed) defeated boss applies; its generator replaces the biome default levelup curve and Min/Max. The 'All' biome acts as a fallback within an entry.")]
+            [Description("Defeated-boss global key -> biome -> level generator. The FIRST entry whose key the world has set applies, so author them highest tier first. Its generator replaces that biome's default levelup curve and its Min/Max level bounds. The 'All' biome acts as a fallback for biomes the entry does not name.")]
             public Dictionary<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>> ConditionalCreatureLevelupChance { get; set; }
 
             [Description("Hand-authored levelup-chance shapes for the 'Table' LevelupCalculationStyle, keyed by span (MaxLevel - MinLevel + 1). A generator using Table style looks up the entry matching its own span and shifts it onto its MinLevel..MaxLevel range.")]

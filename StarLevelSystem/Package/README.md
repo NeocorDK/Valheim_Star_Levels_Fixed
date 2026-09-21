@@ -1,4 +1,4 @@
-# StarLevelSystem
+﻿# StarLevelSystem
 
 ![TitleHeader](https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/TitleHeader.png?raw=true)
 
@@ -65,7 +65,7 @@ Here is a section of the default example config, lets walk through what everythi
 ```
  All:
     distanceScaleModifier: 1.5       # The influence of distance ring based scale increases (1.5 means 150% of the bonus value will be applied)
-    spawnRateModifier: 1.5           # Spawn rate of every creature is 50% higher (1.5), which means every spawn has a 50% chance of being 2 creatures.
+    spawnRateModifier: 1.1           # Spawn rate of every creature is 10% higher (1.1), which means every spawn has a 10% chance of being 2 creatures.
     creatureBaseValueModifiers:      # These values modify the base stats of every creature in this biome (eg, all creatures)
       BaseHealth: 1                  # The default health of all creatures is 100% (1), numbers below 1 reduce health, above increase is (2) is 200% health for everything
       BaseDamage: 1                  # Default damage of all creatures is 100% (1)
@@ -76,10 +76,16 @@ Here is a section of the default example config, lets walk through what everythi
       DamagePerLevel: 0.1            # Each star provides 10% more damage (0.1)
       SpeedPerLevel: 0               # Each star does not increase speed (0)
       SizePerLevel: 0.1              # Each star makes the creature 10% bigger (0.1). Negative values shrink instead (-0.1 is 10% smaller per star)
-    damageRecievedModifiers:         # Damage reduction or increases
+    damageReceivedModifiers:         # Damage reduction or increases
       Poison: 1.5                    # Everything recieves 50% (1.5) more damage from poison (that includes players)
 ```
-Note: `creaturePerLevelValueModifiers` do not apply to characters. But, `damageRecievedModifiers` DOES.
+Note: `creaturePerLevelValueModifiers` do not apply to characters. But, `damageReceivedModifiers` DOES.
+
+The `creatureBaseValueModifiers` and `creaturePerLevelValueModifiers` blocks above are shown to explain
+the shape - the shipped `All` biome does not set either of them, and creatures fall back to the values in
+the main .cfg until you add them. Keys are written in PascalCase when the file is generated
+(`SpawnRateModifier`, `DamageReceivedModifiers`); reading is case-insensitive, so either spelling works.
+`damageRecievedModifiers` is the old misspelling and is still read, but never written back.
 
 Note on sizing: per-level size is applied as `Size + (SizePerLevel * stars)`, so a 0 star creature is
 exactly `Size`. `SizePerLevel` may be negative to make creatures shrink with each star. The final
@@ -102,7 +108,7 @@ Lets take a look at this creature definition
 ```
   Troll:                                # Creature prefab name, must match exactly, you can find this using VNEI, the wiki, or Jotunn prefab documentation
     customCreatureLevelUpChance:        # Sets the levelup chance for this specific creature, overrides the default values, can still be modified by distance bonuses
-      1: 100                            # Gauranteed level 1
+      1: 100                            # Threshold to STAY at level 1 - a roll of 0-100 practically never clears 100, so level 1 is skipped
       2: 50                             # 50% chance to reach level 2
       3: 5                              # 5% chance to reach level 3
     creatureMaxLevelOverride: 11        # Overrides the max level for this creature (11 instead of biome default)
@@ -175,19 +181,21 @@ Star level systems default config has a relatively large spawn range- which is l
 it can be increased by other factors, such as the distance from center bonus.
 ```
 defaultCreatureLevelUpChance:
-  1: 20
-  2: 15
-  3: 12
-  4: 10
-  5: 8
-  6: 6.5
-  7: 5
-  8: 3.5
-  9: 1.5
-  10: 1
-  11: 0.5
-  12: 0.25
+  1: 20      # 20% of creatures go past level 1
+  2: 10
+  3: 5
+  4: 2
+  5: 1
+  6: 0.5
+  7: 0.25
+  8: 0.125
+  # ... halving down to 25: 0.0001 in the shipped defaults
 ```
+
+Rather than writing this table by hand you can have it generated from a curve - see
+`DefaultLevelupGenerators` and `LevelupCalculationStyle` in the header of `LevelSettings.yaml`, or turn
+on "Use level generator" in the in-game config panel. A generator REPLACES this table on load, so the
+two are alternatives, not layers.
 
 ### Nemesis System
 The Nemesis system is designed to constantly tune the world around a player or group of players to ensure that their experience and challenges are appropriate.
