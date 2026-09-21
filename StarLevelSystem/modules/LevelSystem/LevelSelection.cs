@@ -23,11 +23,20 @@ namespace StarLevelSystem.modules.LevelSystem {
         // sitting at exactly the maximum re-rolls a fresh random level on every cache build while nothing
         // ever writes the correction back to its ZDO - which turns the per-frame EnemyHud cache check into
         // a permanent invalidate/rebuild loop.
-        public static int GetMaxCreatureLevel(Character character, CreatureSpecificSetting creature_settings = null, BiomeSpecificSetting biome_settings = null) {
+        public static int GetMaxCreatureLevel(Character character, CreatureSpecificSetting creature_settings = null, BiomeSpecificSetting biome_settings = null, Heightmap.Biome? biome = null) {
             int max_level = (character != null && character.IsBoss()) ? ValConfig.MaxBossLevel.Value : ValConfig.MaxLevel.Value;
             if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride; }
             if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride; }
-            return max_level + 1;
+            int resolved = max_level + 1;
+
+            // A conditional generator replaces the biome's Min/Max as well as its curve. Callers that can
+            // resolve the biome pass it so every bound in the mod agrees; the ones that cannot simply keep
+            // the configured cap. Keeping these in step is what stops the invalidate/rebuild loop this
+            // method's header warns about.
+            if (biome.HasValue && ConditionalScaleSystem.TryGetConditionalLevelRange(biome.Value, out _, out int conditionalMax)) {
+                if (conditionalMax > resolved) { resolved = conditionalMax; }
+            }
+            return resolved;
         }
 
         // Whether this creature's level may be rerolled/corrected when it is loaded above the maximum.
@@ -55,7 +64,7 @@ namespace StarLevelSystem.modules.LevelSystem {
 
             int clevel = cZDO.GetInt(ZDOVars.s_level, 0);
             // Already includes the +1 star offset, so this is directly comparable to the stored ZDO level.
-            int max_level = GetMaxCreatureLevel(character, creature_settings, biome_settings);
+            int max_level = GetMaxCreatureLevel(character, creature_settings, biome_settings, biome);
             //Logger.LogDebug($"Current level from ZDO: {clevel} {clevel <= 0} || {ValConfig.OverlevedCreaturesGetRerolledOnLoad.Value} && {clevel > max_level}");
             if (clevel <= 0 || (OverLevelRerollEnabled(character) && clevel > max_level)) {
                 // Strict ZDO-owner authority: only the roller (the ZDO owner) ever rolls a level.
@@ -72,6 +81,13 @@ namespace StarLevelSystem.modules.LevelSystem {
                 if (biome_settings != null && biome_settings.BiomeMinLevelOverride > 0) { min_level = biome_settings.BiomeMinLevelOverride; }
                 if (creature_settings != null && creature_settings.CreatureMinLevelOverride > -1) { min_level = creature_settings.CreatureMinLevelOverride; }
                 min_level += 1;
+
+                // The other half of "a conditional generator replaces the biome's Min/Max": its curve
+                // starts at its own MinLevel, so the floor has to rise with it or the roll lands below the
+                // lowest entry in the table.
+                if (ConditionalScaleSystem.TryGetConditionalLevelRange(biome, out int conditionalMin, out _) && conditionalMin > min_level) {
+                    min_level = conditionalMin;
+                }
 
                 float levelup_roll = UnityEngine.Random.Range(0f, 100f);
                 float distance_level_modifier = 1;
@@ -229,7 +245,11 @@ namespace StarLevelSystem.modules.LevelSystem {
                 //    Logger.LogDebug($"Level Roll: {roll} >= {levelup_req} = [ {baseval}(base) + ({bonus}(bonus) * {distance_influence})] * {nightBonus} | {kvp.Key}");
                 //}
                 if (roll >= levelup_req || kvp.Key >= maxLevel || index == LevelUpWithBonus.Count) {
-                    selected_level = kvp.Key;
+                    // maxLevel is the cap, not just a reason to stop iterating. A chance table that starts
+                    // above the cap, or steps over it, otherwise returned a level higher than the caller
+                    // allows - which the over-level correction in CompositeLazyCache then had to undo on
+                    // every cache build.
+                    selected_level = Mathf.Min(kvp.Key, maxLevel);
                     if (ValConfig.EnableDebugOutputLevelRolls.Value) {
                         float bonus = 0;
                         if (levelup_bonus != null && levelup_bonus.ContainsKey(kvp.Key)) { bonus = levelup_bonus[kvp.Key]; }

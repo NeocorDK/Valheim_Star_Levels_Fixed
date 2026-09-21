@@ -2171,10 +2171,16 @@ namespace StarLevelSystem.common
                 return pos.x >= MinX && pos.x < MaxX && pos.z >= MinZ && pos.z < MaxZ;
             }
 
+            // A multiplier applied to every level-up threshold, so 1 means "no change". The neutral value
+            // below zone level 2 has to be the same 1 the formula produces at zone level 1, or the curve
+            // jumps discontinuously the moment a zone levels up.
+            //
+            // It used to return the raw (ZoneLevel - 1) * bonus, which is below 1 for any configured
+            // bonus under 1.0 - and the setting's range starts at 0.1. That LOWERED every threshold and
+            // made creatures in a levelled zone weaker, the exact opposite of the feature.
             internal float GetLevelBonus() {
                 if (ZoneLevel <= 1) { return 1f; }
-                float bonus = (ZoneLevel - 1) * ValConfig.ZoneLevelBonusPerLevel.Value;
-                return bonus;
+                return 1f + ((ZoneLevel - 1) * ValConfig.ZoneLevelBonusPerLevel.Value);
             }
         }
 

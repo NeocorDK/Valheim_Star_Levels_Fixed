@@ -48,7 +48,12 @@ namespace StarLevelSystem.modules.LevelSystem {
                 if (chara == null) { chara = creature.GetComponent<Humanoid>(); }
                 if (chara == null || chara.m_nview == null || chara.m_nview.GetZDO() == null) { continue; }
 
-                if (chara.GetLevel() <= ValConfig.MaxLevel.Value) { continue; }
+                // The same bound the roller and the over-level correction use, not a bare MaxLevel. Those
+                // resolve biome and creature overrides and add the +1 star offset, so comparing against
+                // the raw setting rebuilt creatures that were sitting legitimately at their cap on every
+                // config change, and rebuilt every creature under a higher BiomeMaxLevelOverride too.
+                LevelSelection.SelectCreatureBiomeSettings(chara.gameObject, out _, out DataObjects.CreatureSpecificSetting charaSettings, out BiomeSpecificSetting charaBiomeSettings, out Heightmap.Biome charaBiome);
+                if (chara.GetLevel() <= LevelSelection.GetMaxCreatureLevel(chara, charaSettings, charaBiomeSettings, charaBiome)) { continue; }
                 CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, updateCache: true);
 
                 CreatureSetupControl.CreatureSetup(chara, cce.Level);

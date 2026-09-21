@@ -324,7 +324,9 @@ namespace StarLevelSystem.modules.LevelSystem {
                 }
 
                 if (ValConfig.RandomizeTameChildrenLevels.Value == true) {
-                    int level = UnityEngine.Random.Range(1, inheritedLevel);
+                    // Random.Range(int, int) excludes the upper bound, so the parent's own level was
+                    // unreachable and a level 2 parent could only ever produce a level 1 child.
+                    int level = UnityEngine.Random.Range(1, inheritedLevel + 1);
                     if (ValConfig.OffspringCanBeStrongerThanParents.Value == true) {
                         if (UnityEngine.Random.value <= ValConfig.OffspringGainExtraLevelChance.Value) {
                             level += 1;
@@ -332,8 +334,11 @@ namespace StarLevelSystem.modules.LevelSystem {
                         }
                     }
                     Logger.LogDebug($"Character randomized level {level} (1-{inheritedLevel}) being used for child.");
-                    CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, inheritedLevel, updateCache: true);
-                    chara.m_nview.GetZDO().Set(ZDOVars.s_level, inheritedLevel);
+                    // The rolled level, not the parent's: the ZDO is the replicated, authoritative value,
+                    // so writing inheritedLevel here meant the child reverted to its parent's level on the
+                    // next load and RandomizeTameChildrenLevels did nothing that survived a relog.
+                    CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, level, updateCache: true);
+                    chara.m_nview.GetZDO().Set(ZDOVars.s_level, level);
                     CreatureSetupControl.CreatureSetup(chara, level, delay: 0.1f);
                 } else {
                     if (ValConfig.OffspringCanBeStrongerThanParents.Value == true) {
@@ -342,7 +347,11 @@ namespace StarLevelSystem.modules.LevelSystem {
                             Logger.LogDebug($"Child is stronger than parents and has a higher max level.");
                         }
                     }
-                    Logger.LogDebug($"Parent level {inheritedLevel} being used for child from: proc-{proc.m_character.m_level} cdc-{cdc_parent.Level}.");
+                    // cdc_parent is null whenever the parent's cache entry is missing, which the cache
+                    // documents as legitimate -- a config sync flushes the whole thing. It is null-checked
+                    // on the way in and was then dereferenced unguarded here, so breeding a tame after any
+                    // config reload threw inside the Procreate transpiler's delegate.
+                    Logger.LogDebug($"Parent level {inheritedLevel} being used for child from: proc-{proc.m_character.m_level} cdc-{(cdc_parent == null ? "none" : cdc_parent.Level.ToString())}.");
                     CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(chara, inheritedLevel, updateCache: true);
                     chara.m_nview.GetZDO().Set(ZDOVars.s_level, inheritedLevel);
                     CreatureSetupControl.CreatureSetup(chara, inheritedLevel, delay: 0.1f);

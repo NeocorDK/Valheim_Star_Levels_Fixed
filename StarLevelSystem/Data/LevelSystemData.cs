@@ -19,7 +19,15 @@ namespace StarLevelSystem.Data
     public static class LevelSystemData
     {
 
-        public static DataObjects.CreatureLevelSettings SLE_Level_Settings = DefaultConfiguration;
+        // Assigned by the static constructor below, deliberately NOT by a field initializer here. Static
+        // field initializers run in textual order and DefaultConfiguration is declared after this line,
+        // so "= DefaultConfiguration" assigned null and left this field null until the first config load
+        // -- every unguarded reader in that window threw.
+        public static DataObjects.CreatureLevelSettings SLE_Level_Settings;
+
+        static LevelSystemData() {
+            SLE_Level_Settings = DefaultConfiguration;
+        }
 
         public static readonly DataObjects.CreatureLevelSettings DefaultConfiguration = new DataObjects.CreatureLevelSettings()
         {
