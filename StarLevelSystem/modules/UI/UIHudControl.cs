@@ -121,7 +121,8 @@ namespace StarLevelSystem.modules.UI {
         // cleared, so re-entering carried stale entries pointing at destroyed GameObjects.
         public static void ClearExtendedHuds() {
             foreach (StarLevelHud hud in characterExtendedHuds.Values) {
-                if (hud?.HealthText != null) { GameObject.Destroy(hud.HealthText.gameObject); }
+                if (hud == null || hud.HealthText == null) { continue; }
+                GameObject.Destroy(hud.HealthText.gameObject);
             }
             characterExtendedHuds.Clear();
             CurrentBossHuds.Clear();
