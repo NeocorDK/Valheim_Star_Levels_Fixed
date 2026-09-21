@@ -124,18 +124,28 @@ namespace StarLevelSystem.common {
         // Escape inline in Menu.Update, so there is no hook finer than skipping the method for that frame;
         // all it costs is a frame of the menu's own bookkeeping.
         private static bool OnMenuUpdate() {
-            if (Instance == null || Instance.listPanel == null) { return true; }
-            if (ZInput.GetKeyDown(KeyCode.Escape) == false) { return true; }
-            Instance.CloseList();
-            return false;
+            // Raw Input, not ZInput: an open panel holds a GUIManager input block, and reading the key
+            // through ZInput lets that same block swallow the press -- which would leave the panel
+            // impossible to dismiss with the keyboard. Swallowing is handled by returning false below.
+            if (Input.GetKeyDown(KeyCode.Escape) == false) { return true; }
+            if (Instance != null && Instance.listPanel != null) {
+                Instance.CloseList();
+                return false;
+            }
+            // The mod list is skipped entirely when only one mod is registered, so in a single-mod install
+            // it is a mod's own panel -- not listPanel -- that is sitting on screen. Close the innermost
+            // open panel instead; without this Escape falls through and opens the pause menu on top of it.
+            return ConfigUI.CloseTopPanel() == false;
         }
 
         public void Update() {
             // Start scene only. There is no Menu there to run OnMenuUpdate, and nothing else is listening
             // for Escape either, so nothing needs swallowing. The Menu.instance guard keeps the two paths
             // from both firing on the same press.
-            if (listPanel == null || Menu.instance != null) { return; }
-            if (Input.GetKeyDown(KeyCode.Escape)) { CloseList(); }
+            if (Menu.instance != null) { return; }
+            if (Input.GetKeyDown(KeyCode.Escape) == false) { return; }
+            if (listPanel != null) { CloseList(); return; }
+            ConfigUI.CloseTopPanel();
         }
 
         private void OnCustomGUIAvailable() {

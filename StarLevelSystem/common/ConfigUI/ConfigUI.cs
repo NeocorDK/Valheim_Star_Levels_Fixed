@@ -34,12 +34,16 @@ namespace StarLevelSystem.common {
         // refcount.
         private static int inputBlockDepth;
 
-        internal static void PushInputBlock() {
+        // Returns whether the block was actually taken. The caller MUST remember that answer and only
+        // pop what it pushed: recording a hold that never incremented the refcount is how a picker
+        // closing on top of an editor unblocks input while the editor is still open.
+        internal static bool PushInputBlock() {
             // Only meaningful in-world; in the main menu there is no player to block and BlockInput(true)
             // there would fight the menu's own handling.
-            if (Player.m_localPlayer == null) { return; }
+            if (Player.m_localPlayer == null) { return false; }
             inputBlockDepth++;
             if (inputBlockDepth == 1) { GUIManager.BlockInput(true); }
+            return true;
         }
 
         internal static void PopInputBlock() {
@@ -48,19 +52,48 @@ namespace StarLevelSystem.common {
             if (inputBlockDepth == 0) { GUIManager.BlockInput(false); }
         }
 
+        // Panels Escape should dismiss, innermost last. A panel joins this list through its own input
+        // guard, so the list follows the panel's real lifetime instead of a close handler that may never
+        // run. Destroyed entries are pruned lazily -- Unity's fake-null makes a destroyed GameObject
+        // compare equal to null.
+        private static readonly List<GameObject> openPanels = new List<GameObject>();
+
+        // Closes the innermost open panel, if there is one. True when something was closed, which is the
+        // caller's signal to swallow the key press.
+        internal static bool CloseTopPanel() {
+            for (int i = openPanels.Count - 1; i >= 0; i--) {
+                GameObject go = openPanels[i];
+                openPanels.RemoveAt(i);
+                if (go == null) { continue; }
+                UnityEngine.Object.Destroy(go);
+                return true;
+            }
+            return false;
+        }
+
         // Releases a block from OnDestroy rather than from a close handler. If an exception is thrown
         // between building a panel and closing it -- or the scene changes underneath it -- a close-handler
         // release never runs and the player is left unable to move with no way out but a relog.
         internal class ConfigUIInputGuard : MonoBehaviour {
             private bool held;
+            private bool listed;
 
             internal void Hold() {
+                // Registration is independent of the block: a panel opened from the main menu takes no
+                // input block (there is no player) but Escape still has to be able to close it.
+                if (listed == false) {
+                    listed = true;
+                    openPanels.Add(gameObject);
+                }
                 if (held) { return; }
-                held = true;
-                PushInputBlock();
+                held = PushInputBlock();
             }
 
             public void OnDestroy() {
+                if (listed) {
+                    listed = false;
+                    openPanels.Remove(gameObject);
+                }
                 if (held == false) { return; }
                 held = false;
                 PopInputBlock();
@@ -134,6 +167,13 @@ namespace StarLevelSystem.common {
         // The panel every editor sits in. Attaches the input guard, so the block is released by the
         // panel's own destruction whatever route that takes.
         internal static GameObject CreatePanel(string title, float w, float h, out Transform body) {
+            return CreatePanel(title, w, h, out body, out _);
+        }
+
+        // Same panel, but hands back the heading so a paged editor can retitle itself per page. Going
+        // through here rather than building a raw woodpanel is what attaches the input guard, and a panel
+        // without it leaks every keystroke typed into its input fields straight into the game.
+        internal static GameObject CreatePanel(string title, float w, float h, out Transform body, out Text heading) {
             GameObject panel = GUIManager.Instance.CreateWoodpanel(
                 parent: GUIManager.CustomGUIFront.transform,
                 anchorMin: new Vector2(0.5f, 0.5f),
@@ -143,7 +183,7 @@ namespace StarLevelSystem.common {
 
             panel.AddComponent<ConfigUIInputGuard>().Hold();
 
-            AddText(panel.transform, 0f, 16f, w, RowHeight, title, 22, TextAnchor.MiddleCenter,
+            heading = AddText(panel.transform, 0f, 16f, w, RowHeight, title, 22, TextAnchor.MiddleCenter,
                 GUIManager.Instance.ValheimYellow);
 
             body = panel.transform;

@@ -183,25 +183,11 @@ namespace StarLevelSystem.modules.UI {
         }
 
         private static void BuildPanel() {
-            panel = GUIManager.Instance.CreateWoodpanel(
-                parent: GUIManager.CustomGUIFront.transform, 
-                anchorMin: new Vector2(0.5f, 0.5f), 
-                anchorMax: new Vector2(0.5f, 0.5f), 
-                position: new Vector2(0f, 0f),
-                width: PanelW, 
-                height: PanelH, 
-                draggable: true);
-
-            titleText = ConfigUI.AddText(
-                parent: panel.transform,
-                x: Margin,
-                y: 18f,
-                w: PanelW - 2 * Margin,
-                h: RowHeight,
-                text: "StarLevelSystem - Quick Configure",
-                fontSize: 22, 
-                anchor: TextAnchor.MiddleCenter,
-                color: GUIManager.Instance.ValheimYellow);
+            // Through ConfigUI.CreatePanel, never a raw CreateWoodpanel: that is the only thing that
+            // attaches ConfigUIInputGuard. Without it every keystroke typed into this panel's ~25 input
+            // fields also reaches the game, so entering a number walks the character around.
+            panel = ConfigUI.CreatePanel("StarLevelSystem - Quick Configure", PanelW, PanelH, out Transform body, out titleText);
+            ConfigUI.AddCloseX(body, PanelW, ClosePanel);
 
             // Build out the page skeletons
             pageRoots = new GameObject[PageCount];
