@@ -38,6 +38,14 @@ namespace StarLevelSystem.common {
             // through YamlFormat.AddTypeConverter before calling Init.
             YamlFormat.AddTypeConverter(new TolerantEnumConverter());
 
+            // The converter falls back to an enum's zero member, which it documents as safe only for
+            // enums where zero means "do nothing" -- and SetFallback existed for the ones where it does
+            // not, with no caller. Character.Faction is one: its zero member is Players, so a misspelled
+            // faction in RaidSettings.yaml produced raid creatures on the player's own side that would
+            // not attack and could not be hit. ForestMonsters is at least an ordinary hostile faction, so
+            // a typo now costs the right flavour of enemy rather than a silently broken raid.
+            TolerantEnumConverter.SetFallback(typeof(Character.Faction), Character.Faction.ForestMonsters);
+
             RegisterConfigFiles();
             ConfigFileWatcher.Initialize();
 

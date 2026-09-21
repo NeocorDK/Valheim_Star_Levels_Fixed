@@ -9,6 +9,13 @@ namespace StarLevelSystem.modules.LevelSystem {
         public static class ZoneTracker {
             [HarmonyPrefix]
             static void TrackZoneDeath(Character __instance) {
+                if (__instance == null) { return; }
+                // ZoneScaleSystem.OnCreatureKilled states it runs on the creature's owner peer, and
+                // nothing here checked that. Any path that reaches Character.OnDeath on a non-owner
+                // counted the same kill twice, and tames, players and training dummies counted at all -
+                // each one permanently raising that zone's level.
+                if (__instance.IsPlayer() || __instance.IsTamed()) { return; }
+                if (__instance.m_nview == null || __instance.m_nview.IsValid() == false || __instance.m_nview.IsOwner() == false) { return; }
                 ZoneScaleSystem.OnCreatureKilled(__instance.transform.position);
             }
         }

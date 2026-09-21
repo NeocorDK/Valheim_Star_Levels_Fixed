@@ -198,6 +198,10 @@ namespace StarLevelSystem.modules.Raids {
                             int level = 0;
                             if (rmonitor.RaidSpawnDef.UseRaidLevelSystem) {
                                 level = LevelSelection.DetermineLevelRollResult(UnityEngine.Random.Range(0f, 100f), rmonitor.RaidSpawnDef.LevelMax, levelupChance, levelupDistanceBonus, 1);
+                                // LevelMin is documented in the RaidSettings header and set to real values
+                                // on every shipped raid entry, and nothing read it - so the Hildir raid,
+                                // which asks for level 25 skeletons, spawned level 1 ones.
+                                if (level < rmonitor.RaidSpawnDef.LevelMin) { level = rmonitor.RaidSpawnDef.LevelMin; }
                                 Logger.LogRaid($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn} level {level}");
                             } else {
                                 Logger.LogRaid($"Spawning {rmonitor.RaidSpawnDef.PrefabName} at {selectedSpawn}");

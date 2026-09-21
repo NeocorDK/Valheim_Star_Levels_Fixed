@@ -1414,7 +1414,13 @@ namespace StarLevelSystem.common
             public Character.Faction Faction { get; set; } = Character.Faction.TrainingDummy;
             [DefaultValue(1)]
             public int LevelMin { get; set; } = 1;
-            public int LevelMax { get; set; } = ValConfig.MaxLevel.Value;
+            // A constant, not ValConfig.MaxLevel.Value. An initializer that reads a ConfigEntry cannot
+            // have a matching [DefaultValue], so OmitDefaults compared against 0 and silently dropped a
+            // hand-written "LevelMax: 0" on the next rewrite; it also froze whatever MaxLevel happened to
+            // be when the object was constructed, and threw outright if one was constructed before
+            // ValConfig had bound. Every shipped raid entry sets this explicitly.
+            [DefaultValue(1)]
+            public int LevelMax { get; set; } = 1;
             [DefaultValue(true)]
             public bool UseRaidLevelSystem { get; set; } = true;
             public Dictionary<string, ModifierType> RequiredModifiers { get; set; } = null;
