@@ -76,6 +76,8 @@ namespace StarLevelSystem.modules.UI {
         private static GameObject[] pageRoots;
         private static int currentPage;
         private static Text titleText;
+        private static Text generatorPreviewText;
+        private static Text tableWarnText;
         private static GameObject backBtn;
         private static GameObject cancelBtn;
         private static GameObject nextBtn;
@@ -325,27 +327,107 @@ namespace StarLevelSystem.modules.UI {
             // Default level generator below the previews. The Gaussian offset row is tracked so it can be shown
             // only when the Gaussian curve style is selected.
             float genStartY = StartY + 6 * RowPitch + bossShift + 8f;
-            GameObject gaussianRow = null;
-            List<GameObject> gen = new List<GameObject> {
-                ConfigUI.AddHeaderRow(parent, RightColWidth, "Default level generator"),
-                ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Min level", 1f, 50f, staged.generator.MinLevel, true, v => staged.generator.MinLevel = (int)v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Max level", 1f, 200f, staged.generator.MaxLevel, true, v => staged.generator.MaxLevel = (int)v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Level-up chance", 0f, 1f, staged.generator.LevelUpChance, false, v => staged.generator.LevelUpChance = v)
-            };
-            gen.Add(ConfigUI.AddEnumCycleRow(parent, RightColWidth, LabelWidth, 150f, "Curve style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
-                staged.generator.LevelupCalculationStyle = (LevelupCalculationStyle)i;
-                if (gaussianRow != null) {
-                    gaussianRow.SetActive((LevelupCalculationStyle)i == LevelupCalculationStyle.Gaussian);
-                    ConfigUI.LayoutColumn(gen, RightColumnX, genStartY);
+            GameObject tableWarnRow = null;
+            List<GameObject> gaussianRows = new List<GameObject>();
+            List<GameObject> gen = new List<GameObject> { ConfigUI.AddHeaderRow(parent, RightColWidth, "Default level generator") };
+
+            // Rows that only mean anything once the generator is switched on.
+            List<GameObject> genBody = new List<GameObject>();
+
+            void Relayout() {
+                bool on = staged.useGenerator;
+                foreach (GameObject row in genBody) {
+                    if (row == null) { continue; }
+                    if (gaussianRows.Contains(row)) {
+                        row.SetActive(on && staged.generator.LevelupCalculationStyle == LevelupCalculationStyle.Gaussian);
+                    } else if (row == tableWarnRow) {
+                        row.SetActive(on && TableShapeMissing(staged.generator));
+                    } else {
+                        row.SetActive(on);
+                    }
                 }
+                ConfigUI.LayoutColumn(gen, RightColumnX, genStartY);
+                UpdateGeneratorPreview();
+            }
+
+            // Opting in is explicit. A generator replaces DefaultCreatureLevelUpChance wholesale on the
+            // next load, so it must never appear in the file just because someone opened this panel.
+            gen.Add(ConfigUI.AddToggleRow(parent, RightColWidth, LabelWidth + 80f, "Use level generator",
+                staged.useGenerator, v => { staged.useGenerator = v; Relayout(); }, true));
+
+            void AddBodyRow(GameObject row) { gen.Add(row); genBody.Add(row); }
+
+            // "Curve start"/"Curve end", not "Min level"/"Max level": these shape one curve inside
+            // LevelSettings.yaml and are not the global star cap, which is the MaxLevel slider on the
+            // left. The old labels read as a guaranteed minimum, which this is not - the real floor is
+            // BiomeMinLevelOverride / CreatureMinLevelOverride.
+            GameObject curveStartRow = null, curveEndRow = null;
+
+            // Pushing the corrected value back into the other slider matters: nothing else updates a
+            // slider's displayed number, so a silent correction would leave the panel showing a range it
+            // is not going to save. The re-entrant call settles immediately because the second pass finds
+            // the two already in order.
+            void SyncSlider(GameObject row, float value) {
+                Slider s = row == null ? null : row.GetComponentInChildren<Slider>();
+                if (s != null && Mathf.Approximately(s.value, value) == false) { s.value = value; }
+            }
+
+            curveStartRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Curve start level", 1f, 50f, staged.generator.MinLevel, true, v => {
+                staged.generator.MinLevel = (int)v;
+                if (staged.generator.MaxLevel < staged.generator.MinLevel) {
+                    staged.generator.MaxLevel = staged.generator.MinLevel;
+                    SyncSlider(curveEndRow, staged.generator.MaxLevel);
+                }
+                Relayout();
+            });
+            AddBodyRow(curveStartRow);
+            curveEndRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Curve end level", 1f, 200f, staged.generator.MaxLevel, true, v => {
+                staged.generator.MaxLevel = (int)v;
+                if (staged.generator.MinLevel > staged.generator.MaxLevel) {
+                    staged.generator.MinLevel = staged.generator.MaxLevel;
+                    SyncSlider(curveStartRow, staged.generator.MinLevel);
+                }
+                Relayout();
+            });
+            AddBodyRow(curveEndRow);
+            AddBodyRow(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Level-up chance", 0f, 1f, staged.generator.LevelUpChance, false, v => {
+                staged.generator.LevelUpChance = v;
+                UpdateGeneratorPreview();
             }));
-            gaussianRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Gaussian offset", -1f, 1f, staged.generator.GaussianOffset, false, v => staged.generator.GaussianOffset = v);
-            gen.Add(gaussianRow);
-            gen.Add(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Night multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => staged.generator.NightMultiplier = v));
+            AddBodyRow(ConfigUI.AddEnumCycleRow(parent, RightColWidth, LabelWidth, 150f, "Curve style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
+                staged.generator.LevelupCalculationStyle = (LevelupCalculationStyle)i;
+                Relayout();
+            }));
+            GameObject offsetRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Gaussian offset", -1f, 1f, staged.generator.GaussianOffset, false, v => {
+                staged.generator.GaussianOffset = v;
+                UpdateGeneratorPreview();
+            });
+            gaussianRows.Add(offsetRow);
+            AddBodyRow(offsetRow);
+            // Width of the bell. It used to be driven by the level-up chance slider, which is why that
+            // slider appeared to do nothing under this style.
+            GameObject spreadRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Gaussian spread", 0.05f, 1f, staged.generator.GaussianSpread, false, v => {
+                staged.generator.GaussianSpread = v;
+                UpdateGeneratorPreview();
+            });
+            gaussianRows.Add(spreadRow);
+            AddBodyRow(spreadRow);
+            AddBodyRow(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Night multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => staged.generator.NightMultiplier = v));
 
-            gaussianRow.SetActive(staged.generator.LevelupCalculationStyle == LevelupCalculationStyle.Gaussian);
-            ConfigUI.LayoutColumn(gen, RightColumnX, genStartY);
+            // Table style only works for level counts that have a hand-authored shape in
+            // LevelupWeightTablesBySpan, and there is no editor for those here. Saying so beats the
+            // silent collapse to a single level that used to happen.
+            tableWarnRow = ConfigUI.AddTextRow(parent, RightColWidth, 30f, "", 12, new Color(1f, 0.6f, 0.4f));
+            tableWarnText = tableWarnRow.GetComponentInChildren<Text>();
+            AddBodyRow(tableWarnRow);
 
+            // A line of plain arithmetic beneath the sliders. Without it every curve style is edited
+            // blind: the styles differ enormously and none of them is visible until you are in the world.
+            GameObject previewRow = ConfigUI.AddTextRow(parent, RightColWidth, 46f, "", 12, GUIManager.Instance.ValheimBeige);
+            generatorPreviewText = previewRow.GetComponentInChildren<Text>();
+            AddBodyRow(previewRow);
+
+            Relayout();
             UpdateExampleMath();
         }
 
@@ -550,6 +632,61 @@ namespace StarLevelSystem.modules.UI {
         // "ResistPierce" -> "Resist Pierce", "BossSummoner" -> "Boss Summoner".
         private static string Prettify(string name) => Regex.Replace(name, "(\\B[A-Z])", " $1");
 
+        // True when the Table style is selected but no hand-authored shape exists for this level count,
+        // which is the case for every span the panel's own sliders reach by default.
+        private static bool TableShapeMissing(LevelGenerator gen) {
+            if (gen == null || gen.LevelupCalculationStyle != LevelupCalculationStyle.Table) { return false; }
+            int min = Mathf.Min(gen.MinLevel, gen.MaxLevel);
+            int max = Mathf.Max(gen.MinLevel, gen.MaxLevel);
+            if (max == min) { return false; }
+            Dictionary<int, SortedDictionary<int, float>> tables = LevelSystemData.SLE_Level_Settings?.LevelupWeightTablesBySpan;
+            if (tables == null) { return true; }
+            return tables.TryGetValue(max - min + 1, out SortedDictionary<int, float> shape) == false
+                || shape == null || shape.Count < max - min + 1;
+        }
+
+        // Plain arithmetic under the generator sliders. The four curve styles produce wildly different
+        // distributions from the same inputs, and none of it was visible until the admin was back in the
+        // world looking at creatures, which is how the broken ones went unnoticed.
+        private static void UpdateGeneratorPreview() {
+            if (staged?.generator == null) { return; }
+
+            if (tableWarnText != null) {
+                int levels = Mathf.Abs(staged.generator.MaxLevel - staged.generator.MinLevel) + 1;
+                tableWarnText.text = TableShapeMissing(staged.generator)
+                    ? $"No LevelupWeightTablesBySpan entry for {levels} levels - the Exponential curve is used instead. Add one to LevelSettings.yaml or narrow the range."
+                    : "";
+            }
+
+            if (generatorPreviewText == null) { return; }
+            try {
+                SortedDictionary<int, float> curve = staged.generator.GetLevelUpDefinition(quiet: true);
+                if (curve == null || curve.Count == 0) { generatorPreviewText.text = ""; return; }
+
+                int min = int.MaxValue, max = int.MinValue;
+                foreach (int lvl in curve.Keys) {
+                    if (lvl < min) { min = lvl; }
+                    if (lvl > max) { max = lvl; }
+                }
+                // threshold[k] is 100 * P(level > k), because the roller walks levels upward and takes the
+                // first whose threshold the roll clears.
+                float stayAtMin = 100f - Mathf.Clamp(curve[min], 0f, 100f);
+                string line = $"Rolls: level {min} = {stayAtMin:0.0}%";
+                int mid = min + (max - min) / 2;
+                if (mid > min) { line += $"   >= {mid} = {CurveChance(curve, mid)}"; }
+                if (max > min) { line += $"   {max} (top) = {CurveChance(curve, max)}"; }
+                generatorPreviewText.text = line;
+            } catch (Exception e) {
+                generatorPreviewText.text = "";
+                Logger.LogDebug($"Could not preview the level generator curve: {e.Message}");
+            }
+        }
+
+        // P(level >= k) is the threshold recorded against the level below it.
+        private static string CurveChance(SortedDictionary<int, float> curve, int level) {
+            return curve.TryGetValue(level - 1, out float t) ? $"{Mathf.Clamp(t, 0f, 100f):0.00}%" : "-";
+        }
+
         private static void UpdateExampleMath() {
             if (staged == null) { return; }
             if (creatureExampleText != null) {
@@ -615,11 +752,28 @@ namespace StarLevelSystem.modules.UI {
                 // static default (LevelSystemData re-points it there whenever a parse fails), so mutating
                 // it in place would corrupt the defaults for the rest of the session. Raids and nemesis
                 // below already did this; levels and modifiers did not.
-                if (LevelSystemData.SLE_Level_Settings != null) {
+                CreatureLevelSettings levelSource = LevelSystemData.AuthoredLevelSettings ?? LevelSystemData.SLE_Level_Settings;
+                if (levelSource != null) {
+                    // From the authored settings, not the live ones: SLE_Level_Settings has had any
+                    // generator already expanded over its chance tables, so serializing that would write
+                    // the machine-generated curve back as if the admin had typed it.
                     CreatureLevelSettings settings = DataObjects.yamlDeserializer.Deserialize<CreatureLevelSettings>(
-                        DataObjects.yamlSerializer.Serialize(LevelSystemData.SLE_Level_Settings));
+                        DataObjects.yamlSerializer.Serialize(levelSource));
                     settings.EnableConditionalCreatureLevelupChance = staged.enableConditional;
-                    settings.DefaultLevelupGenerators = new List<LevelGenerator> { staged.generator };
+                    if (staged.useGenerator) {
+                        // Edit entry zero in place. This list is a real list of per-prefab generators and
+                        // the panel only ever shows the first; replacing the whole list deleted every
+                        // other entry an admin had hand-authored.
+                        if (settings.DefaultLevelupGenerators == null || settings.DefaultLevelupGenerators.Count == 0) {
+                            settings.DefaultLevelupGenerators = new List<LevelGenerator> { staged.generator };
+                        } else {
+                            settings.DefaultLevelupGenerators[0] = staged.generator;
+                        }
+                    } else {
+                        // Switched off: drop the generators so the authored DefaultCreatureLevelUpChance
+                        // is what takes effect again.
+                        settings.DefaultLevelupGenerators = null;
+                    }
                     string yaml = DataObjects.yamlSerializer.Serialize(settings);
                     // Through ValConfig rather than File.WriteAllText: a bare write drops the documented
                     // header block, which is the only in-file explanation these settings have.
@@ -834,7 +988,12 @@ namespace StarLevelSystem.modules.UI {
             public float mpHealthMod, mpDamageMod;
             public int mpRequiredPlayers;
 
+            // The default level generator, and whether the config actually has one. These are separate on
+            // purpose: the sliders always need something to show, but writing a generator the admin never
+            // asked for replaces their hand-authored DefaultCreatureLevelUpChance with a machine-generated
+            // curve. useGenerator is what the admin opted into, generator is only the shape.
             public LevelGenerator generator;
+            public bool useGenerator;
 
             public int maxMajor, maxMinor, maxBossMods, prefixLimit;
             public float chanceMajor, chanceMinor, chanceBoss;
@@ -903,8 +1062,11 @@ namespace StarLevelSystem.modules.UI {
                     enableNemesis = ValConfig.EnableNemesisSystem.Value,
                 };
 
-                CreatureLevelSettings settings = LevelSystemData.SLE_Level_Settings;
+                // The authored copy, not the live one: SLE_Level_Settings has already had any generator
+                // expanded into its chance tables, and editing from that would write the expansion back.
+                CreatureLevelSettings settings = LevelSystemData.AuthoredLevelSettings ?? LevelSystemData.SLE_Level_Settings;
                 s.enableConditional = settings != null && settings.EnableConditionalCreatureLevelupChance;
+                s.useGenerator = settings?.DefaultLevelupGenerators != null && settings.DefaultLevelupGenerators.Count > 0;
                 s.generator = CloneOrDefaultGenerator(settings, s.maxLevel);
 
                 if (!Enum.TryParse(ValConfig.ModifierIconDisplayStyle.Value, out ModifierDisplayStyle ds)) {
@@ -955,8 +1117,10 @@ namespace StarLevelSystem.modules.UI {
                 return set;
             }
 
-            // Prepopulate the configurable level generator from the existing default generator if one is set,
-            // otherwise a sensible exponential default that approximates the built-in level-up curve.
+            // Prepopulate the configurable level generator from the existing default generator if one is
+            // set. When none is set this returns a starting shape for the sliders ONLY -- it is not
+            // written unless the admin turns the generator on, because a generator overwrites
+            // DefaultCreatureLevelUpChance wholesale on the next load.
             private static LevelGenerator CloneOrDefaultGenerator(CreatureLevelSettings settings, int maxLevel) {
                 LevelGenerator src = null;
                 if (settings?.DefaultLevelupGenerators != null && settings.DefaultLevelupGenerators.Count > 0) {
@@ -969,6 +1133,7 @@ namespace StarLevelSystem.modules.UI {
                         LevelUpChance = 0.2f,
                         LevelupCalculationStyle = LevelupCalculationStyle.Exponential,
                         GaussianOffset = 0f,
+                        GaussianSpread = 0.5f,
                         NightMultiplier = 1f,
                     };
                 }
@@ -979,6 +1144,7 @@ namespace StarLevelSystem.modules.UI {
                     LevelUpChance = src.LevelUpChance,
                     LevelupCalculationStyle = src.LevelupCalculationStyle,
                     GaussianOffset = src.GaussianOffset,
+                    GaussianSpread = src.GaussianSpread,
                     NightMultiplier = src.NightMultiplier,
                 };
             }

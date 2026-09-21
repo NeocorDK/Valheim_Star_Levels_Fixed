@@ -549,7 +549,20 @@ namespace StarLevelSystem.Data
         // edit, a server broadcast, or the in-game editor. Registered as the Apply hook for
         // LevelSettings.yaml, so all three routes run identically.
         internal static void ApplyLoaded(DataObjects.CreatureLevelSettings parsed) {
+            // A structurally valid but empty document deserializes to a non-null object with null
+            // sections, and assigning it silently drops every creature to level 1. RaidsData and
+            // LocationResetData already guard this; levels did not.
+            if (parsed == null) {
+                Logger.LogWarning("Level settings parsed to nothing; keeping the built-in defaults.");
+                parsed = DefaultConfiguration;
+            }
             SLE_Level_Settings = parsed;
+            // Snapshot BEFORE the generators are expanded. ApplyLevelupGenerators overwrites
+            // DefaultCreatureLevelUpChance (and the biome/creature curves) in place, so without this copy
+            // the hand-authored curves are gone from memory as soon as a generator exists -- and the
+            // in-game editor, which re-serializes these settings, would write the expansion back to disk
+            // as though the admin had typed it, with no way to get the original curve back.
+            AuthoredLevelSettings = CloneSettings(parsed);
             ApplyLevelupGenerators();
             Logger.LogDebug("Loaded new Star Level Creature settings, updating loaded creatures...");
             DistanceScaleSystem.DelayedMinimapSetup();
@@ -570,6 +583,24 @@ namespace StarLevelSystem.Data
         }
 
         private static Coroutine runningAttributeUpdate;
+
+        // The settings exactly as they were authored, before ApplyLevelupGenerators expanded any generator
+        // into the levelup-chance tables. This is what an editor must serialize from; SLE_Level_Settings
+        // carries the expansion. Null only if the copy itself failed, in which case callers fall back.
+        internal static DataObjects.CreatureLevelSettings AuthoredLevelSettings;
+
+        // Deep copy through the yaml round trip, the same way the in-game editor copies config it must not
+        // mutate in place.
+        private static DataObjects.CreatureLevelSettings CloneSettings(DataObjects.CreatureLevelSettings source) {
+            if (source == null) { return null; }
+            try {
+                return DataObjects.yamlDeserializer.Deserialize<DataObjects.CreatureLevelSettings>(
+                    DataObjects.yamlSerializer.Serialize(source));
+            } catch (Exception e) {
+                Logger.LogWarning($"Could not snapshot the authored level settings: {e.Message}");
+                return null;
+            }
+        }
 
         // Expands any configured level generators (inline or referenced via CustomLevelupGenerators) into the
         // levelup-chance tables of the default/biome/creature sections, overwriting the existing chances when

@@ -29,7 +29,11 @@ namespace StarLevelSystem.common
         // read as either a bare action scalar or a full mapping; it only claims ProtectionRule, so no
         // other config type is affected.
         public static IDeserializer yamlDeserializer = new DeserializerBuilder().WithCaseInsensitivePropertyMatching().WithTypeConverter(new ProtectionRuleYamlConverter()).Build();
-        public static ISerializer yamlSerializer = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).WithTypeConverter(new ProtectionRuleYamlConverter()).Build();
+        // DisableAliases matters because the in-game editor serializes with this and hands the exact bytes
+        // to YamlConfigManager.ApplyEdited, which writes them to the admin-facing config file. Without it
+        // an object reused by reference emits &a1 / *a1 anchors, which read as file corruption to anyone
+        // editing that yaml by hand. YamlFormat's own serializer does the same for the same reason.
+        public static ISerializer yamlSerializer = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults).WithTypeConverter(new ProtectionRuleYamlConverter()).DisableAliases().Build();
 
         //public static IDeserializer yamlDeserializerMinified = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
         public static ISerializer yamlSerializerJsonCompat = new SerializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).JsonCompatible().Build();
@@ -365,11 +369,16 @@ namespace StarLevelSystem.common
             public LevelupCalculationStyle LevelupCalculationStyle { get; set; } = LevelupCalculationStyle.Linear;
             [DefaultValue(0f)]
             public float GaussianOffset { get; set; } = 0f;
+            [Description("Gaussian style only: width of the bell, 0.05 (one narrow spike) to 1 (nearly flat). Separate from LevelUpChance, which means the same thing in every style.")]
+            [DefaultValue(0.5f)]
+            public float GaussianSpread { get; set; } = 0.5f;
 
             // Expands this generator into a level -> threshold table on the 0-100 roll scale consumed by
             // LevelSelection.DetermineLevelRollResult (which selects the first level whose threshold <= roll, so
             // thresholds must be strictly decreasing). LevelUpChance is authored as a 0-1 fraction (0.25 == 25%).
-            public SortedDictionary<int, float> GetLevelUpDefinition() {
+            // quiet suppresses the Table style's diagnostics. The in-game editor rebuilds this curve on
+            // every slider move to preview it, and those rebuilds must not fill the log.
+            public SortedDictionary<int, float> GetLevelUpDefinition(bool quiet = false) {
                 SortedDictionary<int, float> chances = new SortedDictionary<int, float>();
                 int min = MinLevel;
                 int max = MaxLevel;
@@ -396,26 +405,39 @@ namespace StarLevelSystem.common
                         break;
                     }
                     case LevelupCalculationStyle.Gaussian: {
-                        // Build bell-shaped per-level weights, then convert to the descending threshold curve via
-                        // the survival function (threshold[k] = 100 * P(level > k)) so the roller actually favors
-                        // mid levels. LevelUpChance controls peak; GaussianOffset shifts the center.
+                        // Bell-shaped weights over the levels ABOVE the minimum, turned into a descending
+                        // threshold curve via the survival function and then scaled so that
+                        // threshold[MinLevel] == LevelUpChance * 100.
+                        //
+                        // That scaling is the whole point. The bell used to span MinLevel..MaxLevel and be
+                        // emitted unscaled, which made threshold[MinLevel] roughly 100 minus the first
+                        // weight's share -- around 96-100 whatever LevelUpChance was set to. The slider
+                        // labelled "level-up chance" did not control the chance of levelling up at all: it
+                        // was quietly driving the width of the bell instead, so a configured chance of 0
+                        // still levelled up 96% of creatures. Width now has its own field, GaussianSpread,
+                        // and LevelUpChance means here exactly what it means in every other style.
                         float center = Mathf.Clamp(GaussianOffset, -1f, 1f);
-                        float sigma = Mathf.Max(0.05f, 1f - Mathf.Clamp01(LevelUpChance));
+                        float sigma = Mathf.Max(0.05f, Mathf.Clamp01(GaussianSpread));
                         double twoSigmaSq = 2.0 * sigma * sigma;
-                        int count = span + 1;
-                        double[] weights = new double[count];
+                        int reachable = span;   // levels min+1 .. max
+                        double[] weights = new double[reachable];
                         double total = 0.0;
-                        for (int i = 0; i < count; i++) {
-                            float x = -1f + 2f * i / span; // normalized level position in [-1, 1]
+                        for (int i = 0; i < reachable; i++) {
+                            // normalized position within the reachable levels, in [-1, 1]
+                            float x = reachable == 1 ? 0f : -1f + 2f * i / (reachable - 1);
                             double w = Math.Exp(-((x - center) * (x - center)) / twoSigmaSq);
                             weights[i] = w;
                             total += w;
                         }
+
+                        chances.Add(min, start);
                         double cumulative = 0.0;
-                        for (int i = 0; i < count; i++) {
-                            cumulative += weights[i] / total;                       // P(level <= k)
-                            float threshold = (float)((1.0 - cumulative) * 100.0);  // P(level > k) * 100
-                            int lvl = min + i;
+                        for (int i = 0; i < reachable; i++) {
+                            // A narrow bell centred far from every sample point underflows to zero across
+                            // the board; spread the mass evenly rather than dividing by zero.
+                            cumulative += total > 0.0 ? weights[i] / total : 1.0 / reachable;
+                            int lvl = min + 1 + i;
+                            float threshold = (float)(start * (1.0 - cumulative));
                             chances.Add(lvl, lvl == max ? epsilon : Mathf.Max(threshold, epsilon));
                         }
                         break;
@@ -423,38 +445,69 @@ namespace StarLevelSystem.common
                     case LevelupCalculationStyle.Table: {
                         // Looks up a hand-authored shape by span (level count from MinLevel to MaxLevel inclusive)
                         // in the settings-wide LevelupWeightTablesBySpan, then shifts its entries onto this
-                        // generator's own MinLevel..MaxLevel range. Unlike the formula-driven styles above, this
-                        // does not use LevelUpChance/GaussianOffset - the exact values come from the table.
+                        // generator's own MinLevel..MaxLevel range. Unlike the formula-driven styles above, a
+                        // matching table ignores LevelUpChance/GaussianOffset - the exact values come from the
+                        // table. LevelUpChance still shapes the Exponential fallback below.
                         int spanCount = span + 1;
                         Dictionary<int, SortedDictionary<int, float>> tables = LevelSystemData.SLE_Level_Settings?.LevelupWeightTablesBySpan;
                         SortedDictionary<int, float> shape = null;
                         tables?.TryGetValue(spanCount, out shape);
+
+                        // A missing or too-short table used to emit a single entry at threshold 0, which
+                        // the roller always clears -- so every creature came out at MinLevel and stars
+                        // disappeared from the world entirely. Falling back to the Exponential curve keeps
+                        // levelling working while the log says what to add.
                         if (shape == null || shape.Count == 0) {
-                            Logger.LogWarning($"LevelGenerator '{PrefabName}' uses Table style but no LevelupWeightTablesBySpan entry exists for span {spanCount}; falling back to single level {min}.");
-                            chances.Add(min, 0f);
+                            if (quiet == false) {
+                                Logger.LogWarning($"LevelGenerator '{PrefabName}' uses Table style but LevelupWeightTablesBySpan has no entry for {spanCount} levels; using the Exponential curve instead. Add a {spanCount}-entry table, or set MinLevel..MaxLevel to a span that has one.");
+                            }
+                            BuildExponential(chances, min, max, span, start, epsilon);
                             break;
                         }
+                        if (shape.Count < spanCount) {
+                            if (quiet == false) {
+                                Logger.LogWarning($"LevelGenerator '{PrefabName}': LevelupWeightTablesBySpan[{spanCount}] has only {shape.Count} entries, so levels above {min + shape.Count - 1} would be unreachable; using the Exponential curve instead.");
+                            }
+                            BuildExponential(chances, min, max, span, start, epsilon);
+                            break;
+                        }
+
                         int position = 0;
+                        float ceiling = 100f;
                         foreach (KeyValuePair<int, float> kvp in shape) {
                             int lvl = min + position;
                             if (lvl > max) { break; }
-                            chances.Add(lvl, kvp.Value);
+                            // The roller takes the first level whose threshold the roll clears, so the
+                            // thresholds have to descend. A hand-authored table that rises somewhere would
+                            // otherwise produce a distribution nobody intended, silently: SortedDictionary
+                            // orders by key, not by value, so authoring order is no protection.
+                            float threshold = Mathf.Clamp(kvp.Value, epsilon, ceiling);
+                            if (quiet == false && kvp.Value > ceiling) {
+                                Logger.LogWarning($"LevelGenerator '{PrefabName}': LevelupWeightTablesBySpan[{spanCount}] entry for level {lvl} is {kvp.Value}, which is higher than the level below it; clamped to {threshold} so the curve keeps descending.");
+                            }
+                            chances.Add(lvl, lvl == max ? epsilon : threshold);
+                            ceiling = threshold;
                             position++;
                         }
                         break;
                     }
                     case LevelupCalculationStyle.Exponential:
                     default: {
-                        // Geometric decay of the threshold from 'start' at MinLevel to ~0 at MaxLevel.
-                        float decay = Mathf.Pow(epsilon / start, 1f / span); // start * decay^span == epsilon at max
-                        for (int lvl = min; lvl <= max; lvl++) {
-                            float threshold = start * Mathf.Pow(decay, lvl - min);
-                            chances.Add(lvl, lvl == max ? epsilon : Mathf.Max(threshold, epsilon));
-                        }
+                        BuildExponential(chances, min, max, span, start, epsilon);
                         break;
                     }
                 }
                 return chances;
+            }
+
+            // Geometric decay of the threshold from 'start' at MinLevel to ~0 at MaxLevel. Also the
+            // fallback the Table style uses when its shape is missing, so it lives on its own.
+            private static void BuildExponential(SortedDictionary<int, float> chances, int min, int max, int span, float start, float epsilon) {
+                float decay = Mathf.Pow(epsilon / start, 1f / span); // start * decay^span == epsilon at max
+                for (int lvl = min; lvl <= max; lvl++) {
+                    float threshold = start * Mathf.Pow(decay, lvl - min);
+                    chances.Add(lvl, lvl == max ? epsilon : Mathf.Max(threshold, epsilon));
+                }
             }
 
             public int RollAndDetermineLevel() {
