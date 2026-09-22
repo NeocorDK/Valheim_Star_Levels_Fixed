@@ -193,8 +193,18 @@
     <Exec Command="&quot;$(RepoRoot)libraries\Debug\pdb2mdb.exe&quot; &quot;$(TargetDir)$(TargetFileName)&quot;" />
   </Target>
 
-  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Command="xcopy &quot;$(ProjectDir)\..\StarLevelUnity\AssetBundles\StandaloneWindows\starlevelsystems&quot; &quot;$(ProjectDir)assets\starlevelsystems&quot; /q /y /i&#xA;&#xA;" />
+  <!-- Refresh the asset bundle from the Unity project, but only when the Unity project has actually
+       produced one. AssetBundles/ is a Unity build artifact and is not in the repository; the bundle
+       that ships is the committed copy in assets/. Unconditionally, xcopy exited 4 ("cannot find
+       source") on every checkout that had not opened Unity, which failed the whole build - including a
+       clean clone and CI - over a step that had nothing to copy. -->
+  <PropertyGroup>
+    <_SlsUnityBundle>$(ProjectDir)..\StarLevelUnity\AssetBundles\StandaloneWindows\starlevelsystems</_SlsUnityBundle>
+  </PropertyGroup>
+
+  <Target Name="PreBuild" BeforeTargets="PreBuildEvent" Condition="Exists('$(_SlsUnityBundle)')">
+    <Message Importance="high" Text="Refreshing the asset bundle from the Unity project." />
+    <Copy SourceFiles="$(_SlsUnityBundle)" DestinationFiles="$(ProjectDir)assets\starlevelsystems" />
   </Target>
 
   <PropertyGroup>
