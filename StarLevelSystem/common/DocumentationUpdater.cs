@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -9,10 +10,50 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.common {
     internal static class DocumentationUpdater {
 
-        public static void UpdateDocumentation() {
-            var markdown = ToMarkdown(typeof(CreatureLevelSettings));
-            Logger.LogInfo("Generated documentation:\n" + markdown);
+        // Writes ConfigReference.md next to the yaml files.
+        //
+        // Roughly 200 [Description] attributes on the config classes had exactly one consumer - this
+        // class - whose entry point was commented out, and which only logged markdown into the BepInEx
+        // console when it was not. So the attributes documented the config to nobody, and the yaml
+        // headers in StarLevelConfigFiles were a second, hand-maintained source of truth that drifted
+        // from them. Writing a file is what makes the attributes worth keeping accurate: an admin can
+        // read it, and a drift between it and a header is visible.
+        //
+        // Off by default because it is a developer/admin aid and this runs on every client. The switch
+        // is client-side for the same reason.
+        public static void UpdateDocumentation(string directory) {
+            if (ValConfig.OutputConfigDocumentation == null || ValConfig.OutputConfigDocumentation.Value == false) { return; }
+
+            try {
+                StringBuilder document = new StringBuilder();
+                document.AppendLine("# Star Levels Expanded - configuration reference").AppendLine();
+                document.AppendLine("Generated from the mod's own type definitions. The yaml file headers hold the")
+                    .AppendLine("worked examples; this is the exhaustive list of keys, types and defaults.").AppendLine();
+
+                foreach (Type root in DocumentedRoots) {
+                    document.Append(ToMarkdown(root));
+                }
+
+                string path = Path.Combine(directory, "ConfigReference.md");
+                File.WriteAllText(path, document.ToString());
+                Logger.LogInfo($"Wrote the configuration reference to {path}.");
+            } catch (Exception e) {
+                // A documentation aid must never be the reason startup fails.
+                Logger.LogWarning($"Could not write the configuration reference: {e.Message}");
+            }
         }
+
+        // One root per yaml file. ToMarkdown walks into everything they reference, so this only needs the
+        // top of each tree.
+        private static readonly Type[] DocumentedRoots = new Type[] {
+            typeof(CreatureLevelSettings),
+            typeof(CreatureColorizationSettings),
+            typeof(LootSettings),
+            typeof(CreatureModifierCollection),
+            typeof(RaidConfiguration),
+            typeof(NemesisConfiguration),
+            typeof(LocationResetConfiguration),
+        };
 
         // Generate a markdown style document showing all of the documented object details
         public static string ToMarkdown(Type root) {

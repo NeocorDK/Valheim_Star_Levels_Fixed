@@ -54,7 +54,8 @@ namespace StarLevelSystem.common {
                 Header = LootSettingsHeader,
                 Defaults = () => LootSystemData.DefaultDropConfiguration,
                 Apply = LootSystemData.ApplyLoaded,
-                NeedsPrefabs = true,
+                // No NeedsPrefabs: that flag revalidates, and this file has no validator to re-run. Its
+                // real prefab work is LootSystemData.AttachPrefabsWhenReady, hooked separately.
                 AllowAdminEdit = true,
             });
 
@@ -65,7 +66,8 @@ namespace StarLevelSystem.common {
                 Apply = CreatureModifiersData.ApplyLoaded,
                 Validate = CreatureModifiersData.ValidateModifiers,
                 OnFailure = ConfigFailurePolicy.RevertToDefaults,
-                NeedsPrefabs = true,
+                // ValidateModifiers checks names against ModifierDefinitions, which this build compiles
+                // in. It never reaches the prefab table, so it has nothing to wait for.
                 AllowAdminEdit = true,
             });
 
@@ -99,13 +101,15 @@ namespace StarLevelSystem.common {
                 Header = LocationResetHeader,
                 Defaults = () => LocationResetData.BuildDefaultConfig(),
                 Apply = LocationResetData.ApplyLoaded,
-                NeedsPrefabs = true,
+                // No validator here either, so NeedsPrefabs had nothing to gate.
                 AllowAdminEdit = true,
             });
 
-            // Prefab names cannot be resolved during Awake, so anything whose validator or apply reaches
-            // the prefab table gets a second pass once it exists.
-            PrefabManager.OnPrefabsRegistered += () => RevalidateAll();
+            // Prefab names cannot be resolved during Awake, so a validator that reaches the prefab table
+            // gets a second pass once it exists. None of the current validators do -- they check names
+            // against tables this build compiles in -- so this is the hook waiting for the first one that
+            // declares NeedsPrefabs, not a pass that runs today.
+            PrefabManager.OnPrefabsRegistered += () => RevalidateAll(prefabDependentOnly: true);
 
             // SavedData files -- ZoneData.yaml, ServerRaidSavedData.yaml, NemesisRemoteState.yaml,
             // LocationResetCatalog.yaml and the binary LocationResetState.dat -- deliberately stay outside

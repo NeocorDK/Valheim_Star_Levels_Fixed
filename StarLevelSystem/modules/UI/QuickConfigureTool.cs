@@ -752,14 +752,47 @@ namespace StarLevelSystem.modules.UI {
         // the current save attempt.
         private static readonly HashSet<string> pendingRemoteEdits = new HashSet<string>();
         private static readonly List<string> applyErrors = new List<string>();
+        // Validation WARNINGS, which the dry run produced all along and this panel threw away. They do not
+        // block a save - a rising threshold or a misspelled enum still loads - which is exactly why the
+        // admin has to be shown them: nothing else will tell them the setting they just wrote is inert.
+        private static readonly List<string> applyWarnings = new List<string>();
         private static bool editResultsHooked;
 
         private static void SetMessage(string text) {
             if (messageText != null) { messageText.text = text ?? ""; }
         }
 
+        // The coloured version: errors in red, warnings in amber, through the UI kit's own painter.
+        //
+        // The status line is one row tall and truncates vertically, so only the first few make it onto the
+        // screen. The rest go to the log with a count, which is better than a wall of text clipped at an
+        // arbitrary point with no indication that anything is missing.
+        private const int MaxShownMessages = 3;
+
+        private static void ShowReport(string headline) {
+            List<string> errors = new List<string>();
+            if (string.IsNullOrEmpty(headline) == false) { errors.Add(headline); }
+            errors.AddRange(applyErrors);
+
+            int total = applyErrors.Count + applyWarnings.Count;
+            List<string> shownErrors = Trim(errors, MaxShownMessages + (string.IsNullOrEmpty(headline) ? 0 : 1));
+            List<string> shownWarnings = Trim(applyWarnings, Math.Max(0, MaxShownMessages - applyErrors.Count));
+            if (total > MaxShownMessages) {
+                shownWarnings.Add($"...and {total - MaxShownMessages} more, in the log.");
+            }
+            ConfigUI.SetMessages(messageText, shownErrors, shownWarnings);
+
+            foreach (string warning in applyWarnings) { Logger.LogWarning($"QuickConfigureTool: {warning}"); }
+        }
+
+        private static List<string> Trim(List<string> source, int keep) {
+            if (keep >= source.Count) { return new List<string>(source); }
+            return source.GetRange(0, Math.Max(0, keep));
+        }
+
         private static void ApplyAndSave() {
             applyErrors.Clear();
+            applyWarnings.Clear();
             pendingRemoteEdits.Clear();
             SetMessage("");
 
@@ -781,8 +814,14 @@ namespace StarLevelSystem.modules.UI {
                         ValidationReport report = edit.File.DryRun(edit.Yaml, out string parseError);
                         if (parseError != null) {
                             applyErrors.Add($"{edit.File.FileName}: {parseError}");
-                        } else if (report != null && report.HasErrors) {
+                            continue;
+                        }
+                        if (report == null) { continue; }
+                        if (report.HasErrors) {
                             applyErrors.Add($"{edit.File.FileName}: {string.Join(" ", report.Errors.ToArray())}");
+                        }
+                        foreach (string warning in report.Warnings) {
+                            applyWarnings.Add($"{edit.File.FileName}: {warning}");
                         }
                     }
                     if (applyErrors.Count > 0) {
@@ -801,6 +840,13 @@ namespace StarLevelSystem.modules.UI {
                     }
                     if (applyErrors.Count > 0) {
                         ReportFailure("Some settings were not saved");
+                        return;
+                    }
+                    if (applyWarnings.Count > 0) {
+                        // Saved, but not silently: closing over a wall of warnings is how an admin ends up
+                        // believing a setting took effect when the file says otherwise.
+                        Logger.LogInfo($"QuickConfigureTool applied and saved configuration with {applyWarnings.Count} warning(s).");
+                        ShowReport("Saved, with warnings - press Cancel to close:");
                         return;
                     }
                     Logger.LogInfo("QuickConfigureTool applied and saved configuration.");
@@ -842,7 +888,7 @@ namespace StarLevelSystem.modules.UI {
 
         private static void ReportFailure(string headline) {
             string detail = string.Join("   ", applyErrors.ToArray());
-            SetMessage($"{headline}: {detail}");
+            ShowReport($"{headline}:");
             Logger.LogWarning($"QuickConfigureTool - {headline}: {detail}");
         }
 
@@ -866,6 +912,9 @@ namespace StarLevelSystem.modules.UI {
             if (accepted == false) {
                 applyErrors.Add($"{file.FileName}: {message}");
                 Logger.LogWarning($"The server refused {file.FileName}: {message}");
+            } else if (string.IsNullOrEmpty(message) == false) {
+                // ApplyEdited returns the validation warnings on an accept. They were being dropped here.
+                applyWarnings.Add($"{file.FileName}: {message}");
             }
             if (pendingRemoteEdits.Count > 0) {
                 SetMessage($"Waiting for the server ({pendingRemoteEdits.Count} file(s) left)...");
@@ -873,6 +922,11 @@ namespace StarLevelSystem.modules.UI {
             }
             if (applyErrors.Count > 0) {
                 ReportFailure("The server refused some settings");
+                return;
+            }
+            if (applyWarnings.Count > 0) {
+                Logger.LogInfo($"The server accepted the configuration with {applyWarnings.Count} warning(s).");
+                ShowReport("The server accepted this, with warnings - press Cancel to close:");
                 return;
             }
             Logger.LogInfo("The server accepted the configuration.");

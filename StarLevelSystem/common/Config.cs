@@ -207,6 +207,7 @@ namespace StarLevelSystem.common {
 
         public static ConfigEntry<int> NumberOfCacheUpdatesPerFrame;
         public static ConfigEntry<bool> OutputColorizationGeneratorsData;
+        public static ConfigEntry<bool> OutputConfigDocumentation;
         public static ConfigEntry<int> FallbackDelayBeforeCreatureSetup;
         public static ConfigEntry<float> InitialDelayBeforeSetup;
         public static ConfigEntry<bool> EnableDebugOutputForDamage;
@@ -573,6 +574,7 @@ namespace StarLevelSystem.common {
 
             NumberOfCacheUpdatesPerFrame = BindClientConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
             OutputColorizationGeneratorsData = BindClientConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
+            OutputConfigDocumentation = BindClientConfig("Misc", "OutputConfigDocumentation", false, "Writes ConfigReference.md into the mod's config folder on startup: every yaml key, its type, its default and its description, generated from the mod's own definitions.", advanced: true);
             InitialDelayBeforeSetup = BindClientConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.", true, 0f, 30f);
             FallbackDelayBeforeCreatureSetup = BindClientConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.", true, 1, 60);
             ConfigPollIntervalSeconds = BindClientConfig("Misc", "ConfigPollIntervalSeconds", 30f, "The number of seconds between checks for changes in the yaml config files.", true, 1f, 300f);

@@ -75,7 +75,7 @@ namespace StarLevelSystem
             TerminalManager.Init();
             NemesisSystem.Initialize();
             //Jotunn.Logger.LogInfo("Star Levels have been expanded.");
-            //DocumentationUpdater.UpdateDocumentation();
+            DocumentationUpdater.UpdateDocumentation(ValConfig.GetSecondaryConfigDirectoryPath());
         }
     }
 }

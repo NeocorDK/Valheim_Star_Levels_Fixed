@@ -194,11 +194,17 @@ namespace StarLevelSystem.common {
             }
         }
 
-        // Re-run every file's validator against the values already loaded. Call this once the game state a
-        // validator depends on exists -- most often PrefabManager.OnPrefabsRegistered -- and whenever a
-        // BepInEx entry a validator cross-checks has changed.
-        internal static void RevalidateAll() {
+        // Re-run validators against the values already loaded. Call this once the game state a validator
+        // depends on exists -- most often PrefabManager.OnPrefabsRegistered -- and whenever a BepInEx entry
+        // a validator cross-checks has changed.
+        //
+        // prefabDependentOnly is what makes NeedsPrefabs mean anything. The flag was declared, set on
+        // three files and read by nobody: this method re-checked every file regardless, so a file could
+        // claim to need prefabs, not get them, and nothing would differ. The prefab hook passes true; a
+        // caller reacting to a changed setting passes nothing and gets the full pass.
+        internal static void RevalidateAll(bool prefabDependentOnly = false) {
             for (int i = 0; i < Files.Count; i++) {
+                if (prefabDependentOnly && Files[i].NeedsPrefabs == false) { continue; }
                 try {
                     Files[i].Revalidate();
                 } catch (Exception e) {
