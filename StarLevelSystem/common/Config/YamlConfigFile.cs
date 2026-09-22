@@ -26,6 +26,17 @@ namespace StarLevelSystem.common {
     // how it syncs. Register one of these per file with YamlConfigManager and the framework owns the
     // rest -- default generation, header preservation, watching, RPC wiring, initial sync and broadcast.
     internal abstract class YamlConfigFile {
+        // Raised after any file's values have been published, whatever produced them -- startup, a hand
+        // edit the watcher picked up, an admin upload, a server sync. An open editor needs this: it
+        // snapshots the configuration once, and without a signal it keeps showing, and then saves back,
+        // values that something else has already replaced. On the base class rather than the generic
+        // subclass, so one subscription covers every file.
+        internal static event Action<YamlConfigFile> Published;
+
+        private protected static void RaisePublished(YamlConfigFile file) {
+            Published?.Invoke(file);
+        }
+
         // --- Set by the mod at registration ---
 
         internal string FileName { get; set; }
@@ -437,6 +448,11 @@ namespace StarLevelSystem.common {
                 Apply?.Invoke(Value);
             } catch (Exception e) {
                 Logger.LogError($"{FileName} apply hook threw, the mod may be in a half-configured state: {e}");
+            }
+            try {
+                RaisePublished(this);
+            } catch (Exception e) {
+                Logger.LogWarning($"A {FileName} published-handler threw: {e.Message}");
             }
         }
 

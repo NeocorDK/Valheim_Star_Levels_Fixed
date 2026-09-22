@@ -202,8 +202,9 @@ namespace StarLevelSystem.modules.UI {
             // star7.transform.SetParent(star_7.transform);
             star_7.transform.localPosition = new Vector3(x: -42, y: 19, z: 0);
             star7.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
-            GameObject s7Name = new GameObject(name: "level_n_name");
-            GameObject star7Name = UnityEngine.Object.Instantiate(s7Name, star_7.transform);
+            // Was Instantiate(new GameObject(...)): the template it cloned was empty, and it stayed in the
+            // scene parentless for the rest of the session. One object, parented directly.
+            GameObject star7Name = new GameObject(name: "level_n_name");
             star7Name.transform.SetParent(star_7.transform);
             star7Name.transform.localPosition = new Vector3(x: 0, y: 0, z: 0);
             GUIManager.Instance.CreateText(

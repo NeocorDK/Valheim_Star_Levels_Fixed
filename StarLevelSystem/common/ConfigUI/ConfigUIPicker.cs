@@ -75,7 +75,15 @@ namespace StarLevelSystem.common {
 
             Action<string> rebuild = null;
             rebuild = needle => {
-                foreach (Transform child in content) { UnityEngine.Object.Destroy(child.gameObject); }
+                // Unparent before destroying. Destroy is deferred to the end of the frame, while the new
+                // rows are added immediately, so the layout group spent that frame arranging both sets --
+                // a visible double-height list on every keystroke in the filter box.
+                List<Transform> stale = new List<Transform>();
+                foreach (Transform child in content) { stale.Add(child); }
+                foreach (Transform child in stale) {
+                    child.SetParent(null, false);
+                    UnityEngine.Object.Destroy(child.gameObject);
+                }
 
                 int shown = 0;
                 foreach (string option in all) {

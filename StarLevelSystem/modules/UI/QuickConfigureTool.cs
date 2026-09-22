@@ -190,12 +190,14 @@ namespace StarLevelSystem.modules.UI {
             }
             currentPage = 0;
             ShowPage(0);
+            HookConfigurationChanges();
         }
 
         private static void ClosePanel() {
             // Unhook first: the panel can also be destroyed by Escape or by a scene change, and a
             // subscription that outlives the window would write into destroyed Text components.
             UnhookEditResults();
+            UnhookConfigurationChanges();
             pendingRemoteEdits.Clear();
             messageText = null;
             generatorPreviewText = null;
@@ -488,14 +490,11 @@ namespace StarLevelSystem.modules.UI {
             const float ScrollW = 402f;
             const float ScrollH = 398f;
             ConfigUI.AddText(parent, ScrollX, colStartY, ScrollW, RowHeight, "Enable / disable raids", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
-            GameObject scrollHolder = ConfigUI.NewRect("RaidScrollHolder", parent, ScrollX, colStartY + RowHeight, ScrollW, ScrollH);
-            GameObject scrollCanvas = GUIManager.Instance.CreateScrollView(
-                scrollHolder.transform, false, true, 8f, 4f,
-                GUIManager.Instance.ValheimScrollbarHandleColorBlock, new Color(0f, 0f, 0f, 0.5f),
-                ScrollW, ScrollH);
-            Transform content = scrollCanvas.transform.Find("Scroll View/Viewport/Content");
+            // Through the UI kit rather than hand-rolled: the two copies of this here were missing its
+            // scrollSensitivity, so the raid and modifier lists scrolled several times slower than every
+            // other list in the mod.
+            ConfigUI.CreateScroll(parent, ScrollX, colStartY + RowHeight, ScrollW, ScrollH, out Transform content, out float contentW);
             if (content != null) {
-                float contentW = ScrollW - 16f;   // minus the vertical scrollbar + border (handleSize + 2*border)
                 List<RaidDefinition> raids = staged.raidSource?.Raids;
                 if (raids != null) {
                     foreach (RaidDefinition raid in raids.OrderBy(r => r.Name)) {
@@ -604,14 +603,8 @@ namespace StarLevelSystem.modules.UI {
             const float ScrollW = 400f;
             const float ScrollH = 478f;
             ConfigUI.AddText(parent, ScrollX, StartY, ScrollW, RowHeight, "Enable / disable modifiers", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
-            GameObject scrollHolder = ConfigUI.NewRect("ModScrollHolder", parent, ScrollX, StartY + RowHeight, ScrollW, ScrollH);
-            GameObject scrollCanvas = GUIManager.Instance.CreateScrollView(
-                scrollHolder.transform, false, true, 8f, 4f,
-                GUIManager.Instance.ValheimScrollbarHandleColorBlock, new Color(0f, 0f, 0f, 0.5f),
-                ScrollW, ScrollH);
-            Transform content = scrollCanvas.transform.Find("Scroll View/Viewport/Content");
+            ConfigUI.CreateScroll(parent, ScrollX, StartY + RowHeight, ScrollW, ScrollH, out Transform content, out float contentW);
             if (content != null) {
-                float contentW = ScrollW - 16f;   // minus the vertical scrollbar + border (handleSize + 2*border)
                 AddModifierCategory(content, contentW, "Boss modifiers", ModifierType.Boss, staged.modifierSource?.BossModifiers);
                 AddModifierCategory(content, contentW, "Major modifiers", ModifierType.Major, staged.modifierSource?.MajorModifiers);
                 AddModifierCategory(content, contentW, "Minor modifiers", ModifierType.Minor, staged.modifierSource?.MinorModifiers);
@@ -762,6 +755,58 @@ namespace StarLevelSystem.modules.UI {
             if (messageText != null) { messageText.text = text ?? ""; }
         }
 
+        // A yaml round trip, the same deep copy the apply path uses. Returns null on failure rather than
+        // handing back the live object, which is the thing the caller is trying to avoid holding.
+        private static T Clone<T>(T source) where T : class {
+            if (source == null) { return null; }
+            try {
+                return DataObjects.yamlDeserializer.Deserialize<T>(DataObjects.yamlSerializer.Serialize(source));
+            } catch (Exception e) {
+                Logger.LogWarning($"QuickConfigureTool could not copy {typeof(T).Name}: {e.Message}");
+                return null;
+            }
+        }
+
+        // Configuration changed underneath an open panel -- a server sync, or the file watcher picking up
+        // a hand edit. The panel snapshots its values once, when it opens, and nothing rebuilt it: the
+        // numbers on screen simply went stale, and saving would write them back over whatever had just
+        // arrived. Rebuilding under the admin's hands would throw away their edits, so it says so instead
+        // and lets them decide.
+        private static bool configChangesHooked;
+
+        private static void HookConfigurationChanges() {
+            if (configChangesHooked) { return; }
+            configChangesHooked = true;
+            SynchronizationManager.OnConfigurationSynchronized += OnConfigurationSynchronizedWhileOpen;
+            YamlConfigFile.Published += OnConfigFilePublishedWhileOpen;
+        }
+
+        private static void UnhookConfigurationChanges() {
+            if (configChangesHooked == false) { return; }
+            configChangesHooked = false;
+            SynchronizationManager.OnConfigurationSynchronized -= OnConfigurationSynchronizedWhileOpen;
+            YamlConfigFile.Published -= OnConfigFilePublishedWhileOpen;
+        }
+
+        private static void OnConfigurationSynchronizedWhileOpen(object sender, EventArgs e) {
+            OnConfigurationChangedElsewhere();
+        }
+
+        private static void OnConfigFilePublishedWhileOpen(YamlConfigFile file) {
+            // This panel's own save republishes every file it wrote; that is not a change from elsewhere.
+            if (saving) { return; }
+            OnConfigurationChangedElsewhere();
+        }
+
+        // True for the duration of ApplyAndSave, so the panel does not report its own writes as an
+        // external change.
+        private static bool saving;
+
+        private static void OnConfigurationChangedElsewhere() {
+            if (panel == null) { return; }
+            SetMessage("The configuration changed elsewhere. These values are stale - Cancel and reopen, or save to overwrite.");
+        }
+
         // The coloured version: errors in red, warnings in amber, through the UI kit's own painter.
         //
         // The status line is one row tall and truncates vertically, so only the first few make it onto the
@@ -791,6 +836,11 @@ namespace StarLevelSystem.modules.UI {
         }
 
         private static void ApplyAndSave() {
+            saving = true;
+            try { ApplyAndSaveInner(); } finally { saving = false; }
+        }
+
+        private static void ApplyAndSaveInner() {
             applyErrors.Clear();
             applyWarnings.Clear();
             pendingRemoteEdits.Clear();
@@ -1266,14 +1316,20 @@ namespace StarLevelSystem.modules.UI {
                 }
                 s.displayStyle = ds;
 
-                s.modifierSource = CreatureModifiersData.ActiveCreatureModifiers;
+                // Copies, not the live objects. These three fields are what ModifiersChanged /
+                // RaidsChanged / NemesisChanged compare the staged toggles against, and holding the live
+                // reference meant a server sync or a file-watcher reload during editing moved the
+                // comparison baseline out from under them: the detector would answer a question about
+                // data the admin had never seen, and a "nothing changed" verdict could silently skip a
+                // file the admin had edited.
+                s.modifierSource = Clone(CreatureModifiersData.ActiveCreatureModifiers);
                 s.modifierOn = new Dictionary<ModifierType, HashSet<string>>() {
                     { ModifierType.Boss, KeysOf(s.modifierSource?.BossModifiers) },
                     { ModifierType.Major, KeysOf(s.modifierSource?.MajorModifiers) },
                     { ModifierType.Minor, KeysOf(s.modifierSource?.MinorModifiers) },
                 };
 
-                NemesisConfiguration nemesisCFG = NemesisSystemData.SLE_Nemesis_Settings;
+                NemesisConfiguration nemesisCFG = Clone(NemesisSystemData.SLE_Nemesis_Settings);
                 s.nemesisSource = nemesisCFG;
                 if (nemesisCFG != null) {
                     s.nemCooldown = nemesisCFG.NemesisActionCooldownSeconds;
@@ -1289,7 +1345,7 @@ namespace StarLevelSystem.modules.UI {
                     s.deathReduction = score.DeathScoreReduction;
                 }
 
-                s.raidSource = RaidsData.SLE_Raid_Settings;
+                s.raidSource = Clone(RaidsData.SLE_Raid_Settings);
                 s.raidsOn = new HashSet<string>();
                 if (s.raidSource?.Raids != null) {
                     foreach (RaidDefinition raid in s.raidSource.Raids) {

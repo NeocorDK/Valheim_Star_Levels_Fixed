@@ -35,8 +35,11 @@ namespace StarLevelSystem.modules.UI {
 
                 // Setup boss huds for stacking support
                 Logger.LogDebug("Setting BossHud root");
-                UIHudControl.BossHudRoot = GameObject.Instantiate(new GameObject("BossHuds"), __instance.transform.Find("HudRoot").transform);
-                UIHudControl.BossHudRoot.name = "BossHuds"; // remove the "Cloned"
+                // Built directly rather than Instantiate(new GameObject(...)): that form creates the
+                // object, clones it, and leaves the original parentless in the scene forever - and the
+                // clone then needs its "(Clone)" suffix stripped back off.
+                UIHudControl.BossHudRoot = new GameObject("BossHuds");
+                UIHudControl.BossHudRoot.transform.SetParent(__instance.transform.Find("HudRoot").transform, false);
 
                 // Layout group (vertical = stacked, horizontal = squished) + spacing/top-buffer from config.
                 UIHudControl.EnsureBossLayoutGroup(ValConfig.StackMultipleBossHealthbars.Value);
@@ -64,8 +67,8 @@ namespace StarLevelSystem.modules.UI {
                 // Create a container for scaling the background shaders
                 Logger.LogDebug("Building boss health bar background container");
                 Transform HealthTForm = __instance.m_baseHudBoss.transform.Find("Health");
-                GameObject backgroundContainer = GameObject.Instantiate(new GameObject("Background"), HealthTForm);
-                backgroundContainer.name = "Background";
+                GameObject backgroundContainer = new GameObject("Background");
+                backgroundContainer.transform.SetParent(HealthTForm, false);
                 RectTransform bkgRT = (RectTransform)HealthTForm.Find("bkg").transform;
                 RectTransform darkenRT = (RectTransform)HealthTForm.Find("darken").transform;
                 bkgRT.SetParent(backgroundContainer.transform, false);
@@ -193,6 +196,18 @@ namespace StarLevelSystem.modules.UI {
                 }
 
                 return false;
+            }
+        }
+
+        // Leaving a world tears down every EnemyHud, but the caches keyed off those huds are static and
+        // survived it. characterExtendedHuds and CurrentBossHuds are keyed by ZDOID and were cleared
+        // nowhere, so re-entering a world carried entries pointing at destroyed GameObjects - the stale
+        // boss entries in particular kept the boss-bar layout reserving space for bars that no longer
+        // existed. ClearExtendedHuds was written for this and had only the config-change caller.
+        [HarmonyPatch(typeof(ZNet), nameof(ZNet.Shutdown))]
+        public static class ClearHudCachesOnWorldExit {
+            public static void Postfix() {
+                UIHudControl.ClearExtendedHuds();
             }
         }
 
