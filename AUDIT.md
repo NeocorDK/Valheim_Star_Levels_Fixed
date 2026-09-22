@@ -8,11 +8,25 @@
 
 ---
 
+## Прогресс исправлений
+
+Обновляется по ходу работы. Под каждым пунктом отчёта стоит строка **Статус**.
+
+- ✅ исправлено — 29 из 50: U1–U10, L1–L8, L12, L13, C2–C5, C7, Y2, Y3, Y11, Y13
+- 🟡 частично — 10: U14, L9, L10, C1, Y1, Y5, Y6, Y7, Y8, Y10
+- ⬜ не исправлено — 11: U11, U12, U13, L11, C6, C8, C9, C10, Y4, Y9, Y12
+
+Блок 5 (разбор панели контрол за контролом) закрыт правками 817ed5d, 44f3091, 6c3c80b и f2f7607; отдельных статусов у его подпунктов нет.
+
+---
+
 ## Блок 1. Меню настроек
 
 Это то, из-за чего меню ощущается сломанным.
 
 ### U1 — Панель не блокирует игровой ввод (главная причина)
+
+**Статус:** ✅ исправлено (817ed5d) — панель строится через `ConfigUI.CreatePanel`, страж ввода на месте
 
 `StarLevelSystem/modules/UI/QuickConfigureTool.cs:186`
 
@@ -39,6 +53,8 @@ panel.AddComponent<ConfigUIInputGuard>().Hold();
 
 ### U2 — Escape не закрывает панель, крестика нет
 
+**Статус:** ✅ исправлено (817ed5d) — Escape закрывает верхнюю открытую панель, добавлен крестик
+
 `StarLevelSystem/common/ConfigUI/QuickConfigBroker.cs:126-131`
 
 ```csharp
@@ -61,6 +77,8 @@ if (order.Count == 1) { Invoke(order[0]); return; }
 Побочно: `QuickConfigBroker.cs:128` читает Escape через `ZInput` (учитывает блокировку ввода), а `:138` — через `Input` (не учитывает). Если блокировка заработает (см. U1), `ZInput` может проглотить нажатие.
 
 ### U3 — Удалённый админ молча теряет все правки YAML
+
+**Статус:** ✅ исправлено (6c3c80b) — подключён `ConfigNetwork.RequestEdit`, вердикты сервера показываются в панели
 
 `StarLevelSystem/common/Config/YamlConfigManager.cs:106-109`
 
@@ -92,6 +110,8 @@ ClosePanel();
 
 ### U4 — Сохранение затирает список генераторов уровней
 
+**Статус:** ✅ исправлено (44f3091) — генератор стал опциональным, запись правит нулевой элемент списка на месте
+
 `StarLevelSystem/modules/UI/QuickConfigureTool.cs:636`
 
 ```csharp
@@ -113,15 +133,21 @@ if (settings?.DefaultLevelupGenerators != null && settings.DefaultLevelupGenerat
 
 ### U5 — Ошибки применения нигде не показываются
 
+**Статус:** ✅ исправлено (6c3c80b) — добавлена строка статуса между кнопками навигации
+
 `ConfigUI.SetMessages` (`ConfigUI.cs:231-241`) существует ровно для вывода ошибок в панель и не вызывается ниоткуда. `ConfigUIPrompt` (`ConfigUIPrompt.cs`, подтверждение несохранённых изменений) — файл целиком без вызовов.
 
 Дополнительно: кнопка `Apply & Save` видна только на пятой странице (`QuickConfigureTool.cs:244`). Пользователь, изменивший что-то на первой странице и нажавший `Cancel`, теряет правки без предупреждения.
 
 ### U6 — Половинчатое применение
 
+**Статус:** ✅ исправлено (6c3c80b) — все документы собираются и валидируются до первой записи
+
 `QuickConfigureTool.cs:596-624` присваивает 26 значений BepInEx (каждое немедленно вызывает свой `SettingChanged`) **до** первой валидации YAML на `:642`. Отказ YAML оставляет половину настроек применённой и живой, без отката.
 
 ### U7 — `float.TryParse` без инвариантной культуры
+
+**Статус:** ✅ исправлено (4c99ad4) — `ConfigUI` разбирает и форматирует числа через `InvariantCulture`
 
 `StarLevelSystem/common/ConfigUI/ConfigUI.cs:396`
 
@@ -137,6 +163,8 @@ box.onEndEdit.AddListener(str => {
 **Что сделать:** `float.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out v)` и `ToString("0.00", CultureInfo.InvariantCulture)`.
 
 ### U8 — Показанное значение не равно сохранённому
+
+**Статус:** ✅ исправлено (f2f7607) — диапазоны ползунков приведены к диапазонам `ConfigEntry`, очки Nemesis больше не целочисленные
 
 `ConfigUI.cs:359` клампит значение в диапазон ползунка, а `:385` заполняет текстовое поле уже **из склампленного** ползунка, а не из исходного значения:
 
@@ -159,6 +187,8 @@ box.SetTextWithoutNotify(Fmt(slider.value, wholeNumbers));
 
 ### U9 — Защита «не показывать кнопку вне хоста» не работает
 
+**Статус:** ✅ исправлено (f2f7607) — `ApplyRegistration` пересчитывается на смену админ-статуса и на синхронизацию конфига
+
 `QuickConfigureTool.cs:106-127`. `ApplyRegistration()` вызывается один раз из `Awake` (`:98`), когда `ZNet.instance == null`. Поэтому:
 
 ```csharp
@@ -174,6 +204,8 @@ private static bool IsOwner() { return ZNet.instance == null || ZNet.instance.Is
 Это прямая причина U3: кнопка предлагается там, где сохранение не работает.
 
 ### U10 — Рассинхрон счётчика блокировки ввода
+
+**Статус:** ✅ исправлено (817ed5d) — `PushInputBlock` сообщает, взялся ли блок; `Hold()` запоминает только реально взятый
 
 `ConfigUI.cs:37-41` против `:57-60`:
 
@@ -195,11 +227,15 @@ internal void Hold() {
 
 ### U11 — Панель почти не локализована
 
+**Статус:** ⬜ не исправлено
+
 Токены `$sls_cfg_*` используются только на первой странице (`QuickConfigureTool.cs:260`, `:268`, `:276`, `:278`, `:282-283`), и даже там `:261` — сырая английская строка. Хардкод на английском: заголовки страниц (`:238`), страница статистики (`:303-317`), генератор (`:344-358`), рейды (`:374-395`), Nemesis (`:452-475`), модификаторы (`:489-511`), все 28 описаний модификаторов (`:40-69`), кнопки навигации (`:225-228`).
 
 Существующие токены заведены только в `Localization/English.json:2-10` — в остальных ~30 языковых файлах их нет.
 
 ### U12 — Нет скролла, жёсткие размеры
+
+**Статус:** ⬜ не исправлено
 
 Корни страниц — прямоугольники фиксированной высоты (`:209-215`): `PanelH - ContentTop - 70` = `690 - 92 - 70` = **528 px**. Скролл есть только у списка модификаторов (`:512-516`) и списка рейдов (`:396-400`).
 
@@ -211,11 +247,15 @@ internal void Hold() {
 
 ### U13 — Панель не реагирует на внешние изменения конфига
 
+**Статус:** ⬜ не исправлено
+
 `staged` снимается один раз при открытии (`:161`). `OnConfigurationSynchronized` доходит только до `QuickConfigBroker.RefreshVisibility` (`:112-114`); открытую панель ничто не перестраивает и не закрывает. Синхронизация с сервером или срабатывание file-watcher'а во время редактирования оставляет на экране устаревшие числа.
 
 Хуже: `ModifiersChanged()` / `RaidsChanged()` / `NemesisChanged()` (`:726-773`) сравнивают с `staged.modifierSource` / `raidSource` / `nemesisSource`, а это **живые ссылки**, захваченные на `:929`, `:937`, `:952`. Они могут измениться под детектором, и тогда он отвечает на вопрос о данных, которых пользователь не видел.
 
 ### U14 — Остальное по UI
+
+**Статус:** 🟡 частично (f2f7607) — предупреждение о `Table`, превью генератора и взаимный порядок Min/Max сделаны в 44f3091; `CurrentBossHuds` очищается (4c99ad4). Остальное открыто: локализация кнопок, утечки временных `GameObject`, дублирование скролла без `scrollSensitivity`, двойная отрисовка picker'а, `Next >` / `Apply & Save` в одном прямоугольнике
 
 - **`Table` выбирается без редактора таблиц.** Стиль `LevelupCalculationStyle.Table` есть в переборе (`:349`), но панель не умеет редактировать `LevelupWeightTablesBySpan` (`DataObjects.cs:510-512`). После выбора видимые ползунки «Level-up chance» и «Gaussian offset» перестают на что-либо влиять, без предупреждения. См. также L13.
 - **Два разных ползунка подписаны «Max level»** — `ValConfig.MaxLevel` (`:306`) и `generator.MaxLevel` (`:346`), рядом на одной странице, без взаимной привязки.
@@ -232,6 +272,8 @@ internal void Hold() {
 
 ### L1 — `SLE_Level_Settings` инициализируется в `null`, а не дефолтами
 
+**Статус:** ✅ исправлено (f8c807f) — инициализация перенесена в статический конструктор
+
 `StarLevelSystem/Data/LevelSystemData.cs:22-24`
 
 ```csharp
@@ -246,6 +288,8 @@ public static readonly DataObjects.CreatureLevelSettings DefaultConfiguration = 
 **Что сделать:** поменять объявления местами либо перенести инициализацию в статический конструктор.
 
 ### L2 — Бонус зоны инвертирован
+
+**Статус:** ✅ исправлено (f8c807f) — `GetLevelBonus` возвращает `1 + (ZoneLevel - 1) * bonus`
 
 `StarLevelSystem/common/DataObjects.cs:2121-2125`
 
@@ -276,6 +320,8 @@ float levelup_req = kvp.Value * nightBonus * zoneBonus;
 
 ### L3 — Выбранный уровень может превысить `maxLevel`
 
+**Статус:** ✅ исправлено (f8c807f) — ключ таблицы клампится по `maxLevel`
+
 `StarLevelSystem/modules/LevelSystem/LevelSelection.cs:231-232`
 
 ```csharp
@@ -288,6 +334,8 @@ if (roll >= levelup_req || kvp.Key >= maxLevel || index == LevelUpWithBonus.Coun
 **Что сделать:** `selected_level = Mathf.Min(kvp.Key, maxLevel);`
 
 ### L4 — Штатные `ConditionalCreatureLevelupChance` нерабочие
+
+**Статус:** ✅ исправлено (f8c807f) — `resolvedByBiome` читается через `TryGetConditionalLevelRange`, работает фоллбэк на биом `All`
 
 `Data/LevelSystemData.cs:341-348` — генератор для Meadows при `defeated_fader`:
 
@@ -309,6 +357,8 @@ new LevelGenerator() { MinLevel = 6, MaxLevel = 30, LevelUpChance = 0.25f, ... }
 
 ### L5 — Кэш условного скейлинга не сбрасывается при убийстве босса
 
+**Статус:** ✅ исправлено (f8c807f) — активный ключ выводится на каждый вызов, кэшируется только разворот генератора
+
 `ConditionalScaleSystem.cs:37` читает **глобальные ключи мира**:
 
 ```csharp
@@ -321,6 +371,8 @@ if (entry.Key != null && ZoneSystem.instance.GetGlobalKey(entry.Key)) {
 
 ### L6 — NullReferenceException при разведении прирученных
 
+**Статус:** ✅ исправлено (f8c807f) — `cdc_parent` больше не разыменовывается в логе
+
 `StarLevelSystem/modules/LevelSystem/LevelPatches.cs:345`
 
 ```csharp
@@ -332,6 +384,8 @@ Logger.LogDebug($"Parent level {inheritedLevel} being used for child from: proc-
 **Эффект:** разведение любого прирученного существа после перезагрузки конфига бросает исключение внутри делегата транспайлера `Procreation.Procreate`.
 
 ### L7 — Off-by-one и противоречие в случайных уровнях потомства
+
+**Статус:** ✅ исправлено (f8c807f) — `Random.Range(1, inherited + 1)`, в ZDO пишется выпавший уровень
 
 `LevelPatches.cs:327`
 
@@ -353,6 +407,8 @@ CreatureSetupControl.CreatureSetup(chara, level, delay: 0.1f); // случайн
 
 ### L8 — NRE на частично заполненном `Colorization.yaml`
 
+**Статус:** ✅ исправлено (7842603) — пропущенная секция `DefaultLevelColorization` достраивается до слияния
+
 `StarLevelSystem/modules/Colorization/Colorization.cs:64-68`
 
 ```csharp
@@ -372,6 +428,8 @@ foreach (var entry in defaultColorizationSettings.DefaultLevelColorization) {
 Корневая причина — Y1: обещанного слияния с дефолтами не существует.
 
 ### L9 — Границы максимального уровня расходятся
+
+**Статус:** 🟡 частично (f8c807f) — `UpdateLevelsOnChange` переведён на `GetMaxCreatureLevel`; `NemesisRemoteSpawnControl.cs:396` всё ещё клампит по голому `ValConfig.MaxLevel`
 
 `modules/LevelSystem/UpdateLevelsOnChange.cs:51`
 
@@ -397,6 +455,8 @@ cce.Level = Mathf.Min(levelBonus + cce.Level, ValConfig.MaxLevel.Value);
 
 ### L10 — `MaxBossLevel` недостижим при штатных дефолтах
 
+**Статус:** 🟡 частично (4c99ad4) — описание `MaxBossLevel` теперь честно говорит о приоритете `BiomeMaxLevelOverride`; само поведение не изменено
+
 `LevelSelection.cs:27-29`
 
 ```csharp
@@ -407,6 +467,8 @@ if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_l
 `BiomeMaxLevelOverride` перекрывает боссовый предел безусловно. При штатных дефолтах Эйктюр в Meadows ограничен уровнем 4, а не 10. Описание `MaxBossLevel` (`Config.cs:386`) о приоритете биома не упоминает.
 
 ### L11 — Несколько генераторов складываются аддитивно без ограничения
+
+**Статус:** ⬜ не исправлено
 
 `modules/LevelSystem/LevelGeneratorResolver.cs:42-44` → `common/SLSExtensions.cs:317-321`
 
@@ -420,6 +482,8 @@ if (addative) { primaryDict[key] += otherDict[key]; }
 
 ### L12 — Подсчёт убийств для зон без проверки владельца
 
+**Статус:** ✅ исправлено (f2f7607) — патч проверяет владельца, прирученных и игроков
+
 `modules/LevelSystem/LevelScalingPatches.cs:10-13`
 
 ```csharp
@@ -431,6 +495,8 @@ static void TrackZoneDeath(Character __instance) {
 `ZoneScaleSystem.cs:217-218` утверждает «Runs on the creature's owner peer», но патч не проверяет ни `m_nview.IsOwner()`, ни `IsTamed()`, ни `IsPlayer()`. Любой путь, вызывающий `Character.OnDeath` не у владельца (или у прирученного, или у тренировочного манекена), накручивает счётчик зоны, а зона от этого необратимо повышает уровень.
 
 ### L13 — Стиль `Table` непригоден в поставке
+
+**Статус:** ✅ исправлено (44f3091) — короткая или отсутствующая таблица откатывается на `Exponential`, неубывающие пороги клампятся
 
 `Data/LevelSystemData.cs:334-338` задаёт таблицы для спанов **4, 5, 6**:
 
@@ -469,6 +535,8 @@ foreach (KeyValuePair<int, float> kvp in shape) {
 
 ### C1 — Мёртвые настройки
 
+**Статус:** 🟡 частично (4c99ad4, f2f7607) — `MiniMapRingGeneratorUpdatesPerFrame`, `EnemyHealthPerWorldLevel`, `RaidSpawnEntry.LevelMin` и `TolerantEnumConverter.SetFallback` подключены; `RequestEdit` / `EditResult` подключены в 6c3c80b. Открыто: `NeedsPrefabs`, `ConfigUI.SetMessages`, `ConfigUIPrompt`
+
 Объявлены, забинжены, задокументированы — и не читаются нигде (проверено `grep` по всему дереву).
 
 | Настройка | Объявление | Что на самом деле |
@@ -480,6 +548,8 @@ foreach (KeyValuePair<int, float> kvp in shape) {
 Туда же — мёртвая инфраструктура: `ConfigNetwork.RequestEdit` и `EditResult` (см. Y8), флаг `NeedsPrefabs`, метод `TolerantEnumConverter.SetFallback`, `ConfigUI.SetMessages`, весь `ConfigUIPrompt`.
 
 ### C2 — Описания противоречат коду
+
+**Статус:** ✅ исправлено (4c99ad4, 7842603) — все перечисленные описания переписаны под фактическое поведение
 
 | Настройка | Написано | Код |
 |---|---|---|
@@ -496,6 +566,8 @@ foreach (KeyValuePair<int, float> kvp in shape) {
 
 ### C3 — Дефолт вне собственного диапазона
 
+**Статус:** ✅ исправлено (4c99ad4) — настройка переименована и получила диапазон, в котором лежит её дефолт
+
 `Config.cs:403`
 
 ```csharp
@@ -506,6 +578,8 @@ MiniMapRingGeneratorUpdatesPerFrame = BindServerConfig("LevelSystem", "MiniMapRi
 
 ### C4 — Около 13 настроек молча наследуют диапазон `0..150`
 
+**Статус:** ✅ исправлено (4c99ad4) — восемнадцати настройкам проставлены осмысленные min/max
+
 Числовые перегрузки `BindServerConfig` (`Config.cs:946`, `:966`) навешивают `AcceptableValueRange` **всегда**, поэтому «без границ» не бывает — бывают неверные границы. Настройки, забинженные без явных min/max:
 
 `FishSizeScalePerLevel` (`:434`), `TreeSizeScalePerLevel` (`:439`), `PerLevelTreeLootScale` / `PerLevelBirdLootScale` / `PerLevelMineRockLootScale` / `PerLevelDestructibleLootScale` (`:441-444`), `MultiplayerEnemyMinDamageTaken` (`:448`), `HealthDisplayFontSizeAdjustment` (`:543`), `InitialDelayBeforeSetup` (`:562`), `KillReportFlushIntervalSeconds` (`:511`), `MaxActiveRaids` (`:485`), `MaxMajorModifiersPerCreature` / `MaxMinorModifiersPerCreature` (`:517-518`), `MaxBossModifiersPerBoss` (`:528`), `LimitCreatureModifierPrefixes` (`:530`), `FallbackDelayBeforeCreatureSetup` (`:563`).
@@ -514,6 +588,8 @@ MiniMapRingGeneratorUpdatesPerFrame = BindServerConfig("LevelSystem", "MiniMapRi
 
 ### C5 — Ноль разрешён там, где он ломает систему
 
+**Статус:** ✅ исправлено (4c99ad4) — нули запрещены там, где они ломают систему
+
 - `KillReportFlushIntervalSeconds = 0` (`Config.cs:511`) → `ZoneScaleSystem.cs:234-235`: `WaitForSeconds(0)` пропускает один кадр, то есть слив очереди и (на клиенте) отправка RPC выполняются **каждый кадр**.
 - `HealthDisplayFontSizeAdjustment = 0` или `EnemyHealthbarScalarY = 0` (`Config.cs:540-543`) → нулевой размер шрифта (`UIHudControl.cs:325`).
 - `EnemyHealthMultiplier = 0` (`Config.cs:410`) → существа с 0 HP (`HealthModifications.cs:44`).
@@ -521,6 +597,8 @@ MiniMapRingGeneratorUpdatesPerFrame = BindServerConfig("LevelSystem", "MiniMapRi
 Для сравнения, места с делением защищены корректно: `DestructibleMaxLevel` и `RockMaxLevel` объявлены с минимумом 1 (`Config.cs:432-433`), `NumberOfCacheUpdatesPerFrame` тоже (`:560`).
 
 ### C6 — Ключ не совпадает с именем поля, опечатки в ключах
+
+**Статус:** ⬜ не исправлено
 
 | Поле | Ключ в `.cfg` | Где |
 |---|---|---|
@@ -535,6 +613,8 @@ MiniMapRingGeneratorUpdatesPerFrame = BindServerConfig("LevelSystem", "MiniMapRi
 
 ### C7 — `SettingChanged` навешан непоследовательно
 
+**Статус:** ✅ исправлено (4c99ad4) — обработчики добавлены `MaxBossLevel`, `EnableCreatureScalingPerLevel` и четырём настройкам полосок здоровья
+
 Есть обработчик у: `MaxLevel` (`:385`), `PerLevelScaleBonus` / `MinimumCreatureScale` (`:405`, `:407`), `EnableTreeScaling` / `EnableScalingBirds` / `EnableScalingFish` (`:423-440`), четырёх боссовых настроек HUD (`:553-556`) и ещё около 25.
 
 Нет обработчика у:
@@ -546,6 +626,8 @@ MiniMapRingGeneratorUpdatesPerFrame = BindServerConfig("LevelSystem", "MiniMapRi
 
 ### C8 — Клиентские настройки сделаны серверными
 
+**Статус:** ⬜ не исправлено
+
 Все перечисленные идут через `BindServerConfig`, а значит `IsAdminOnly = true` и принудительная синхронизация с сервера:
 
 - Косметика карты: `DistanceRingColorOptions` (`:401`), `MapRingsAboveFog` (`:394`), `EnableMapRingsForDistanceBonus` (`:392`), `ZoneOverlayColorOptions` (`:512`), `ZoneOverlayColorTransparency` (`:514`), `ZoneOverlayAboveFog` (`:507`), `EnableZoneMapOverlay` (`:506`).
@@ -556,11 +638,15 @@ MiniMapRingGeneratorUpdatesPerFrame = BindServerConfig("LevelSystem", "MiniMapRi
 
 ### C9 — Непоследовательная раскладка по секциям
 
+**Статус:** ⬜ не исправлено
+
 - Секция `"Client config"` — единственная с пробелом и строчной буквой (остальные: `LevelSystem`, `ObjectLevels`, `LootSystem`, `ZoneScaling`, `ModCompat`). В ней же лежат три **серверные** по смыслу настройки: `EnableLocationResetLog` (`:364`), `EnableDebugLocationResetDetails` (`:360`), `EnableDebugRaidDetails` (`:356`) — соответствующие подсистемы выполняются на сервере (`LocationResetLog.cs:29`, `ZoneResetReport.cs:146`).
 - Настройки совместимости размазаны по трём секциям: `ModCompat` (`:570-571`), `Raids/EnableCustomRaidsCompat` (`:488`), `UI/EnableJewelcraftingBossHudCompat` (`:557`).
 - `UseCustomHealthFont` (`:542`) забинжен через другую перегрузку, чем соседи, и не получает `ConfigurationManagerAttributes`.
 
 ### C10 — Клиент не может перечитать свои настройки, будучи в игре
+
+**Статус:** ⬜ не исправлено
 
 `Config.cs:576-585`
 
@@ -580,6 +666,8 @@ private static void OnMainConfigFileChanged(string _) {
 
 ### Y1 — Обещанного слияния с дефолтами не существует
 
+**Статус:** 🟡 частично (7842603) — для `Colorization.yaml` слияние реализовано и обещание в заголовке стало правдой; для остальных шести файлов слияния по-прежнему нет
+
 `StarLevelConfigFiles.cs:44-45` при регистрации утверждает:
 
 > Colours are cosmetic and the merge-in of missing default keys makes a partial file workable
@@ -587,6 +675,8 @@ private static void OnMainConfigFileChanged(string _) {
 Такого слияния нет ни в `YamlConfigFile.cs`, ни в `YamlConfigManager.cs`. Частично заполненный файл даёт `null`-коллекции по всем пропущенным секциям. Это корневая причина L8 и общий риск для всех семи конфигов.
 
 ### Y2 — Начальная синхронизация отправляет файл с диска, а не значения из памяти
+
+**Статус:** ✅ исправлено (4c99ad4) — начальная синхронизация не отдаёт файл, который не разобрался на сервере
 
 `common/Config/ConfigNetwork.cs:224`
 
@@ -602,6 +692,8 @@ package.Write(File.Exists(file.Path) ? File.ReadAllText(file.Path) : file.Serial
 
 ### Y3 — `ApplyEdited` возвращает `true`, даже если запись на диск упала
 
+**Статус:** ✅ исправлено (4c99ad4) — `WriteRawToDisk` сообщает об ошибке, `ApplyEdited` возвращает `false`
+
 `YamlConfigManager.cs:128` вызывает `WriteRawToDisk`, единственная обработка ошибки которого — `:170-172`:
 
 ```csharp
@@ -612,9 +704,13 @@ catch (Exception e) { Logger.LogError($"Could not write {file.FileName}: {e.Mess
 
 ### Y4 — Файл с упавшим `Prepare` остаётся без синхронизации на всю сессию
 
+**Статус:** ⬜ не исправлено
+
 `YamlConfigManager.cs:220-224` оборачивает всё тело `Prepare` в `catch (Exception e) { Logger.LogError(...) }`. Если исключение произошло до строки 218, `ConfigNetwork.RegisterFile` не выполняется → `file.Rpc` остаётся `null` → `Broadcast` становится no-op (`ConfigNetwork.cs:184`), `AddInitialSynchronization` не регистрируется. Входящие клиенты не получают по этому файлу **ничего** и работают на своих дефолтах. Единственный признак — одна строка `LogError`.
 
 ### Y5 — Watcher основного `.cfg` не переставляет штамп
+
+**Статус:** 🟡 частично (4c99ad4) — `RefreshOwnConfigStamp` переставляет штамп после записи собственного `.cfg`; удаление отслеживаемого файла по-прежнему не замечается
 
 `Config.cs:287` регистрирует watcher для файла BepInEx, но `ConfigFileWatcher.RefreshStamp` вызывается ровно из одного места — `YamlConfigManager.cs:169`, и только для YAML-файлов.
 
@@ -625,6 +721,8 @@ catch (Exception e) { Logger.LogError($"Could not write {file.FileName}: {e.Mess
 Удаление отслеживаемого файла не замечается вовсе — `ConfigFileWatcher.cs:106`: `if (File.Exists(path) == false) { continue; }`.
 
 ### Y6 — Опечатки в enum молча превращаются в нулевой член
+
+**Статус:** 🟡 частично (f2f7607) — `SetFallback` подключён для `Character.Faction`; опечатки в enum всё ещё не попадают в `ValidationReport` и срабатывают внутри `DryRun`
 
 `common/Config/TolerantEnumConverter.cs:18-22` формулирует условие безопасности:
 
@@ -640,6 +738,8 @@ catch (Exception e) { Logger.LogError($"Could not write {file.FileName}: {e.Mess
 
 ### Y7 — Второй, несогласованный YAML-конвейер
 
+**Статус:** 🟡 частично (44f3091) — `yamlSerializer` получил `DisableAliases`; десериализатор по-прежнему без `TolerantEnumConverter` и `IgnoreUnmatchedProperties`, RPC-обработчики без `try/catch`
+
 `common/DataObjects.cs:31-35` собирает собственные сериализатор и десериализатор независимо от `YamlFormat`:
 
 ```csharp
@@ -653,17 +753,23 @@ public static IDeserializer yamlDeserializer = new DeserializerBuilder().WithCas
 
 ### Y8 — Мёртвый канал правок и мёртвые флаги
 
+**Статус:** 🟡 частично (6c3c80b) — канал правок подключён и используется панелью; `NeedsPrefabs` и версия протокола у семи рабочих RPC остаются открытыми
+
 - `ConfigNetwork.RequestEdit` (`:99`) — ноль вызовов, `EditResult` (`:33`) — ноль подписчиков. При этом все семь файлов ставят `AllowAdminEdit = true` (`StarLevelConfigFiles.cs:36,47,56,67,76,92,101`), регистрируя семь RPC-каналов, по которым не пойдёт ни один пакет.
 - `NeedsPrefabs` выставляется у трёх файлов (`StarLevelConfigFiles.cs:55,66,100`) и не читается никем, кроме объявления (`YamlConfigFile.cs:53`). `RevalidateAll` (`YamlConfigManager.cs:178`) перепроверяет все файлы подряд, а `Revalidate` выходит сразу при отсутствии валидатора (`YamlConfigFile.cs:173`). `LootSettingsFile` и `LocationResetSettings` заявляют `NeedsPrefabs = true`, но валидатора не имеют — проход `PrefabManager.OnPrefabsRegistered` для них бесполезен, а их хук `AttachLootPrefabs` (`LootSystemData.cs:208`) отработал только на `Awake`, до появления таблицы префабов.
 - Единственная проверка версии протокола — байт `EditProtocolVersion` (`ConfigNetwork.cs:29`, проверки на `:127` и `:157`) в мёртвом канале. Семь рабочих RPC версии не несут вообще (`:210-219`).
 
 ### Y9 — Об ошибках разбора сообщается только по первому ключу
 
+**Статус:** ⬜ не исправлено
+
 `YamlConfigFile.cs:267-283`: единственный `catch (YamlException strictError)` логирует один `Describe(strictError)`, после чего прогоняет весь документ толерантным проходом. Файл с пятью опечатками покажет одну, четыре отбросит молча.
 
 `ConfigValidation.SuggestKey` (`ConfigValidation.cs:57`), существующий ровно для подсказки «Did you mean 'X'?», из этого пути не вызывается.
 
 ### Y10 — `LevelSettings.yaml` — единственный файл без валидации
+
+**Статус:** 🟡 частично (44f3091) — `ApplyLoaded` откатывается на встроенные дефолты для пустого документа; валидатора у `LevelSettings` по-прежнему нет
 
 `StarLevelConfigFiles.cs:31-37` — ни `Validate`, ни политики отказа. Для сравнения: `ModifierSettings` (`:64-65`) имеет и валидатор, и `RevertToDefaults`; `ColorSettings` (`:46`) и `RaidSettings` (`:75`) — тоже.
 
@@ -679,6 +785,8 @@ internal static void ApplyLoaded(DataObjects.CreatureLevelSettings parsed) {
 Сравните с `RaidsData.cs:440-449`, который явно логирует и подставляет встроенные дефолты для структурно валидного, но пустого документа, и с `LocationResetData.cs:250` (`parsed ?? DefaultConfiguration`). Здесь `DefaultCreatureLevelUpChance: {}` молча делает всех существ первого уровня: `DetermineLevelRollResult` обходит пустой словарь, оставляет `selected_level = 0` (`LevelSelection.cs:205`), и кламп минимума (`:107`) превращает это в 1.
 
 ### Y11 — `RaidSpawnEntry.LevelMax` попадает в ловушку `OmitDefaults`
+
+**Статус:** ✅ исправлено (f2f7607) — `LevelMax` стал константой с `[DefaultValue]`
 
 `common/DataObjects.cs:1363-1364`
 
@@ -696,6 +804,8 @@ public int LevelMax { get; set; } = ValConfig.MaxLevel.Value;   // нет [Defau
 
 ### Y12 — Атрибуты `[Description]` не доходят до пользователя
 
+**Статус:** ⬜ не исправлено
+
 Около 200 строк `[Description]` в `DataObjects.cs` читает единственный потребитель — `DocumentationUpdater.cs:49`, а его точка входа закомментирована (`StarLevelSystem.cs:78`):
 
 ```csharp
@@ -705,6 +815,8 @@ public int LevelMax { get; set; } = ValConfig.MaxLevel.Value;   // нет [Defau
 И даже будучи включённой, она только пишет markdown в `Logger.LogInfo`. В результате существуют два несинхронных источника правды — атрибуты в коде и написанные вручную заголовки в `StarLevelConfigFiles.cs`. Именно отсюда расхождения ниже.
 
 ### Y13 — Документация разошлась с кодом
+
+**Статус:** ✅ исправлено (7842603) — описания условных тиров, биома `All`, Nemesis и `Table` приведены к коду; README переписан, корневой `README.MD` больше не заглушка
 
 **Заявленное, но не реализованное поведение:**
 
