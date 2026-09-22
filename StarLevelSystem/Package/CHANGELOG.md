@@ -1,4 +1,35 @@
-﻿**1.11.0**
+﻿**1.12.0**
+ ---
+ ```
+- The config panel is fully localized. Every heading, label, button and modifier description was a hardcoded English string; all 134 of them are now tokens, so translations can reach the panel
+- The config panel no longer hangs off the edge of the screen. At 1366x768 with GuiScale 1.5 the 900x690 window ran past both edges, taking the nav buttons with it. Any panel that does not fit is now scaled to
+- The config panel says when its values have gone stale. It snapshots the configuration on open, and a server sync or a hand edit used to leave it showing - and then saving back - numbers that were no longer true
+- Validation warnings are shown in the config panel. A rising threshold, a LevelUpChance written as 25 instead of 0.25, or a misspelled enum does not block a save, which is exactly why you have to be told: nothing else says the setting you just wrote is inert
+- LevelSettings.yaml is validated. It was the only config file with no validator at all, while carrying the arithmetic every other system reads. An empty level curve is refused outright - it silently put the whole world at level 1
+- A yaml file with several typos now reports all of them at once, each with a "did you mean". Only the first was ever named, so the rest were fixed one restart at a time
+- Bad enum values now reach the validation report instead of only the log, so the panel can no longer say a document applied cleanly when it did not
+- Stacked level generators no longer sum past the roll ceiling. Generators ADD where their level ranges overlap, and a total at or above 100 made those levels unrollable; the sum is capped and logged. The stacking itself was documented nowhere
+- Nemesis minibosses can reach the boss level cap. Both Nemesis level caps used the plain MaxLevel setting, which ignores the star offset and every biome and creature override
+- Config files that fail to load are still synchronised to clients. A load that threw skipped the network registration, so joining clients silently got nothing for that file and ran on their own defaults
+- Network payloads from a peer on a different version no longer throw out of a coroutine, and an empty raid-start payload no longer throws at all
+- Deleting a config file is noticed and the file restored, rather than going unremarked until the next restart
+- ConfigReference.md can be generated next to the yaml files: every key, type, default and description. Set OutputConfigDocumentation. The ~200 descriptions in the code previously reached nobody
+- Fixed three leaked GameObjects, HUD caches surviving a world change, two lists scrolling several times slower than the rest, and the modifier picker drawing a doubled list on every keystroke
+ ```
+
+ CLIENT-SIDE SETTINGS: twenty settings that are nobody's business but the machine rendering them were
+ server-synchronised, so your value was overwritten by the server's - minimap and zone-overlay colours,
+ healthbar scale and font, boss healthbar layout, modifier icon style, and the per-frame and IO budgets.
+ They are client-side now, and a connected client finally reloads its own .cfg mid-session, which it
+ never did. Server admins: these values now come from each player's own file.
+
+ RENAMED SETTINGS (your value is carried across automatically, no action needed):
+ `OverlevedCreaturesGetRerolledOnLoad` is now `OverLevelCreaturesGetRerolledOnLoad`,
+ `RandomizeTameLevels` is now `RandomizeTameChildrenLevels`, and the two stray compatibility switches
+ `Raids.EnableCustomRaidsCompat` and `UI.EnableJewelcraftingBossHudCompat` move to the `ModCompat`
+ section beside the other two, the latter as `EnableJewelCraftingBossHudCompat`.
+
+**1.11.0**
  ---
  ```
 - Fixed the in-game config panel leaking keystrokes into the game - typing a number in any field used to walk your character around and fire hotkeys
