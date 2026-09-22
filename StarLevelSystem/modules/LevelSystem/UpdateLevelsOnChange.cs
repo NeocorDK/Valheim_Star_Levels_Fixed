@@ -14,11 +14,26 @@ using static StarLevelSystem.common.DataObjects;
 namespace StarLevelSystem.modules.LevelSystem {
     internal static class UpdateLevelsOnChange {
 
+        private static Coroutine runningLevelCorrection;
+
         public static void ModifyLoadedCreatureLevels(object s, EventArgs e) {
             // Do not run before the area is loaded
             if (Player.m_localPlayer == null) { return; }
+            if (ZNetScene.instance == null) { return; }
             if (ZNetScene.instance.IsAreaReady(Player.m_localPlayer.gameObject.transform.position) == false) { return; }
-            TaskRunner.Run().StartCoroutine(ModifyLoadedCreaturesLevels());
+
+            // One pass at a time, the same way LevelSystemData guards its own rebuild. Both MaxLevel and
+            // MaxBossLevel land here, and the in-game editor writes about 25 ConfigEntry values in a row
+            // - as does a server pushing its configuration to a client - so two passes would otherwise
+            // walk the same creatures concurrently. This pass rerolls anything above the cap and writes
+            // the result back to the ZDO, so an overlapping pair can interleave a stale correction with a
+            // fresh one on the same creature.
+            MonoBehaviour runner = TaskRunner.Run();
+            if (runningLevelCorrection != null) {
+                runner.StopCoroutine(runningLevelCorrection);
+                runningLevelCorrection = null;
+            }
+            runningLevelCorrection = runner.StartCoroutine(ModifyLoadedCreaturesLevels());
         }
 
         public static void UpdateFishMaxLevel() {

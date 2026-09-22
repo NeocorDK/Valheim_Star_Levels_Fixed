@@ -633,40 +633,77 @@ namespace StarLevelSystem.common {
             }
 
             // A connected client used to skip the reload entirely, because the early exit asked "am I the
-            // server?" rather than "is this setting synchronised?". It owns roughly a dozen client-side
-            // settings - BossHudTopBuffer, BossHealthbarWidthPercent, the debug switches - and editing any
-            // of them mid-session did nothing until it disconnected.
+            // server?" rather than "is this setting synchronised?". It owns roughly thirty client-side
+            // settings - the healthbar and map cosmetics, BossHudTopBuffer, the debug switches - and
+            // editing any of them mid-session did nothing until it disconnected.
             //
-            // The reload has to happen for those, so the synchronised values are put back afterwards:
-            // reading the file would otherwise replace what the server sent with whatever this machine
-            // happens to have on disk. Reload keeps the same ConfigEntry objects, so they can be captured
-            // directly. Only entries whose value actually moved are written back, so a restore raises no
-            // SettingChanged of its own.
-            List<KeyValuePair<ConfigEntryBase, object>> synchronized = SnapshotSynchronizedValues();
-            cfg.Reload();
-            int restored = 0;
-            foreach (KeyValuePair<ConfigEntryBase, object> kvp in synchronized) {
-                if (Equals(kvp.Key.BoxedValue, kvp.Value)) { continue; }
-                kvp.Key.BoxedValue = kvp.Value;
-                restored++;
+            // Deliberately NOT cfg.Reload() here, even followed by putting the server's values back.
+            // Reload assigns every entry from the file, and each assignment raises SettingChanged
+            // synchronously - so a connected client would run its own MaxLevel through
+            // UpdateLevelsOnChange.ModifyLoadedCreatureLevels before anything could restore the server's
+            // value. That pass rerolls creatures above the cap and writes the result to their ZDOs, so a
+            // client whose local MaxLevel is lower than the server's would persist wrong levels onto
+            // every creature it owns, and the restoring pass afterwards could not undo what had already
+            // been written. Only client-side entries are touched, so the synchronised ones are never
+            // disturbed in the first place and no window exists.
+            ApplyClientSideEntriesFromFile();
+        }
+
+        // Re-read the .cfg and push only the entries the server does NOT own into their ConfigEntry.
+        //
+        // BepInEx has no per-entry reload, so the file is parsed here. Anything that fails to parse is
+        // skipped with a warning rather than taking the rest of the pass down: this runs off a file the
+        // player is editing by hand, so half-written lines are expected.
+        private static void ApplyClientSideEntriesFromFile() {
+            Dictionary<ConfigDefinition, string> fileValues;
+            try {
+                fileValues = ReadConfigFileValues(cfg.ConfigFilePath);
+            } catch (Exception e) {
+                Logger.LogWarning($"Could not re-read {Path.GetFileName(cfg.ConfigFilePath)}: {e.Message}");
+                return;
             }
-            if (restored > 0) {
-                Logger.LogDebug($"Reapplied {restored} server-synchronised setting(s) after the reload.");
-                // SaveOnConfigSet means those writes rewrote the file; re-seed the stamp so the watcher
-                // does not read its own work back as another change.
+
+            int applied = 0;
+            foreach (ConfigDefinition definition in cfg.Keys) {
+                ConfigEntryBase entry = cfg[definition];
+                // The server owns this one. Leaving it alone is the whole point of this method.
+                if (IsServerSide(entry)) { continue; }
+                if (fileValues.TryGetValue(definition, out string raw) == false) { continue; }
+                if (entry.GetSerializedValue() == raw) { continue; }
+                try {
+                    entry.SetSerializedValue(raw);
+                    applied++;
+                } catch (Exception e) {
+                    Logger.LogWarning($"Ignoring an unusable value for {definition.Section}.{definition.Key}: {e.Message}");
+                }
+            }
+
+            if (applied > 0) {
+                Logger.LogInfo($"Applied {applied} changed client-side setting(s); server-synchronised settings were left alone.");
+                // SaveOnConfigSet is on, so those assignments rewrote the file. Re-seed the stamp so the
+                // watcher does not read its own work back as another change.
                 RefreshOwnConfigStamp();
             }
         }
 
-        // Every entry this mod marked IsAdminOnly, which is exactly the set Jotunn synchronises from the
-        // server. Read off the entries themselves rather than a parallel list, so a setting cannot be
-        // bound as server-side and then forgotten here.
-        private static List<KeyValuePair<ConfigEntryBase, object>> SnapshotSynchronizedValues() {
-            List<KeyValuePair<ConfigEntryBase, object>> values = new List<KeyValuePair<ConfigEntryBase, object>>();
-            foreach (ConfigDefinition definition in cfg.Keys) {
-                ConfigEntryBase entry = cfg[definition];
-                if (IsServerSide(entry) == false) { continue; }
-                values.Add(new KeyValuePair<ConfigEntryBase, object>(entry, entry.BoxedValue));
+        // A minimal reader for BepInEx's .cfg format: [Section] headers, "Key = Value" entries, '#'
+        // comments. Values may themselves contain '=', so only the first one separates.
+        private static Dictionary<ConfigDefinition, string> ReadConfigFileValues(string path) {
+            Dictionary<ConfigDefinition, string> values = new Dictionary<ConfigDefinition, string>();
+            string section = null;
+            foreach (string line in File.ReadAllLines(path)) {
+                string trimmed = line.Trim();
+                if (trimmed.Length == 0 || trimmed.StartsWith("#")) { continue; }
+                if (trimmed.StartsWith("[") && trimmed.EndsWith("]")) {
+                    section = trimmed.Substring(1, trimmed.Length - 2).Trim();
+                    continue;
+                }
+                if (section == null) { continue; }
+                int split = trimmed.IndexOf('=');
+                if (split <= 0) { continue; }
+                string key = trimmed.Substring(0, split).Trim();
+                if (key.Length == 0) { continue; }
+                values[new ConfigDefinition(section, key)] = trimmed.Substring(split + 1).Trim();
             }
             return values;
         }

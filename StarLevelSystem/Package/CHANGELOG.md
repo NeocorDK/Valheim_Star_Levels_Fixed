@@ -15,6 +15,8 @@
 - Deleting a config file is noticed and the file restored, rather than going unremarked until the next restart
 - ConfigReference.md can be generated next to the yaml files: every key, type, default and description. Set OutputConfigDocumentation. The ~200 descriptions in the code previously reached nobody
 - Fixed three leaked GameObjects, HUD caches surviving a world change, two lists scrolling several times slower than the rest, and the modifier picker drawing a doubled list on every keystroke
+- A connected client re-reads only the settings it owns. Reloading the whole file would have run the client's own MaxLevel through the level-correction pass before the server's value could be put back, and that pass writes corrected levels to creature ZDOs
+- The level-correction pass no longer runs two overlapping copies of itself over the same creatures, which a batch of setting changes - the config panel writing ~25 values, or a server pushing its configuration - could previously start
  ```
 
  CLIENT-SIDE SETTINGS: twenty settings that are nobody's business but the machine rendering them were
