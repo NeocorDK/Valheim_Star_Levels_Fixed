@@ -12,9 +12,9 @@
 
 Обновляется по ходу работы. Под каждым пунктом отчёта стоит строка **Статус**.
 
-- ✅ исправлено — 29 из 50: U1–U10, L1–L8, L12, L13, C2–C5, C7, Y2, Y3, Y11, Y13
-- 🟡 частично — 10: U14, L9, L10, C1, Y1, Y5, Y6, Y7, Y8, Y10
-- ⬜ не исправлено — 11: U11, U12, U13, L11, C6, C8, C9, C10, Y4, Y9, Y12
+- ✅ исправлено — 36 из 50: U1–U10, L1–L9, L11–L13, C2–C5, C7, Y2–Y4, Y6, Y7, Y9–Y11, Y13
+- 🟡 частично / сознательно ограничено — 6: U14, L10, C1, Y1, Y5, Y8
+- ⬜ не исправлено — 8: U11, U12, U13, C6, C8, C9, C10, Y12
 
 Блок 5 (разбор панели контрол за контролом) закрыт правками 817ed5d, 44f3091, 6c3c80b и f2f7607; отдельных статусов у его подпунктов нет.
 
@@ -429,7 +429,7 @@ foreach (var entry in defaultColorizationSettings.DefaultLevelColorization) {
 
 ### L9 — Границы максимального уровня расходятся
 
-**Статус:** 🟡 частично (f8c807f) — `UpdateLevelsOnChange` переведён на `GetMaxCreatureLevel`; `NemesisRemoteSpawnControl.cs:396` всё ещё клампит по голому `ValConfig.MaxLevel`
+**Статус:** ✅ исправлено (1255ec9) — оба оставшихся места в Nemesis (`NemesisRemoteSpawnControl`, `NemesisPatches`) переведены на `GetMaxCreatureLevel`; у метода появился параметр `asBoss` для существа, которое только повышается до босса
 
 `modules/LevelSystem/UpdateLevelsOnChange.cs:51`
 
@@ -468,7 +468,7 @@ if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_l
 
 ### L11 — Несколько генераторов складываются аддитивно без ограничения
 
-**Статус:** ⬜ не исправлено
+**Статус:** ✅ исправлено (1255ec9) — все три места слияния используют `LevelGeneratorResolver.MergeGeneratorCurve`, сумма клампится по 100 с предупреждением; аддитивность описана в заголовке YAML и в `[Description]`
 
 `modules/LevelSystem/LevelGeneratorResolver.cs:42-44` → `common/SLSExtensions.cs:317-321`
 
@@ -666,7 +666,7 @@ private static void OnMainConfigFileChanged(string _) {
 
 ### Y1 — Обещанного слияния с дефолтами не существует
 
-**Статус:** 🟡 частично (7842603) — для `Colorization.yaml` слияние реализовано и обещание в заголовке стало правдой; для остальных шести файлов слияния по-прежнему нет
+**Статус:** 🟡 сознательно ограничено (7842603) — слияние реализовано там, где оно обещано: `Colorization.yaml` достраивает пропущенную секцию из встроенной таблицы, и заголовок файла теперь говорит правду. Общего слияния «дозаполнить любую пропущенную секцию из дефолтов» намеренно нет: оно воскрешало бы секции, которые админ удалил осознанно. Вместо него — точечные защиты в `ApplyLoaded` (`LevelSystemData`, `RaidsData`, `LocationResetData`) и новый валидатор `LevelSettings`, который ловит единственный по-настоящему фатальный случай
 
 `StarLevelConfigFiles.cs:44-45` при регистрации утверждает:
 
@@ -704,7 +704,7 @@ catch (Exception e) { Logger.LogError($"Could not write {file.FileName}: {e.Mess
 
 ### Y4 — Файл с упавшим `Prepare` остаётся без синхронизации на всю сессию
 
-**Статус:** ⬜ не исправлено
+**Статус:** ✅ исправлено (d16b3dd) — `Prepare` разделён на три шага, `ConfigNetwork.RegisterFile` и регистрация watcher'а выполняются независимо от исхода загрузки
 
 `YamlConfigManager.cs:220-224` оборачивает всё тело `Prepare` в `catch (Exception e) { Logger.LogError(...) }`. Если исключение произошло до строки 218, `ConfigNetwork.RegisterFile` не выполняется → `file.Rpc` остаётся `null` → `Broadcast` становится no-op (`ConfigNetwork.cs:184`), `AddInitialSynchronization` не регистрируется. Входящие клиенты не получают по этому файлу **ничего** и работают на своих дефолтах. Единственный признак — одна строка `LogError`.
 
@@ -722,7 +722,7 @@ catch (Exception e) { Logger.LogError($"Could not write {file.FileName}: {e.Mess
 
 ### Y6 — Опечатки в enum молча превращаются в нулевой член
 
-**Статус:** 🟡 частично (f2f7607) — `SetFallback` подключён для `Character.Faction`; опечатки в enum всё ещё не попадают в `ValidationReport` и срабатывают внутри `DryRun`
+**Статус:** ✅ исправлено (f2f7607, d16b3dd) — `SetFallback` подключён для `Character.Faction`; `TolerantEnumConverter` собирает плохие значения в текущую загрузку, и они попадают в `ValidationReport` и на пути `LoadFrom`, и на пути `DryRun` (заодно `DryRun` больше не засоряет лог предупреждениями об отклонённых кандидатах)
 
 `common/Config/TolerantEnumConverter.cs:18-22` формулирует условие безопасности:
 
@@ -738,7 +738,7 @@ catch (Exception e) { Logger.LogError($"Could not write {file.FileName}: {e.Mess
 
 ### Y7 — Второй, несогласованный YAML-конвейер
 
-**Статус:** 🟡 частично (44f3091) — `yamlSerializer` получил `DisableAliases`; десериализатор по-прежнему без `TolerantEnumConverter` и `IgnoreUnmatchedProperties`, RPC-обработчики без `try/catch`
+**Статус:** ✅ исправлено (44f3091, d16b3dd) — `yamlSerializer` получил `DisableAliases`; `yamlDeserializer` получил `IgnoreUnmatchedProperties` и `TolerantEnumConverter`, а RPC-обработчики разбирают полезную нагрузку через `DataObjects.TryDeserialize` (включая NRE на пустом `OnClientReceiveRaidStart`)
 
 `common/DataObjects.cs:31-35` собирает собственные сериализатор и десериализатор независимо от `YamlFormat`:
 
@@ -761,7 +761,7 @@ public static IDeserializer yamlDeserializer = new DeserializerBuilder().WithCas
 
 ### Y9 — Об ошибках разбора сообщается только по первому ключу
 
-**Статус:** ⬜ не исправлено
+**Статус:** ✅ исправлено (d16b3dd) — добавлен `UnknownKeyScan`: обход разобранного документа по типу через рефлексию, до 12 неизвестных ключей за проход, каждый с подсказкой из `ConfigValidation.SuggestKey`
 
 `YamlConfigFile.cs:267-283`: единственный `catch (YamlException strictError)` логирует один `Describe(strictError)`, после чего прогоняет весь документ толерантным проходом. Файл с пятью опечатками покажет одну, четыре отбросит молча.
 
@@ -769,7 +769,7 @@ public static IDeserializer yamlDeserializer = new DeserializerBuilder().WithCas
 
 ### Y10 — `LevelSettings.yaml` — единственный файл без валидации
 
-**Статус:** 🟡 частично (44f3091) — `ApplyLoaded` откатывается на встроенные дефолты для пустого документа; валидатора у `LevelSettings` по-прежнему нет
+**Статус:** ✅ исправлено (44f3091, 1255ec9) — `ApplyLoaded` откатывается на встроенные дефолты, добавлен `LevelSystemData.ValidateLevelSettings`: пустой документ — ошибка; возрастающие пороги, `LevelUpChance` вне 0..1, `MinLevel > MaxLevel`, `Table` без таблицы и несуществующая ссылка на генератор — предупреждения
 
 `StarLevelConfigFiles.cs:31-37` — ни `Validate`, ни политики отказа. Для сравнения: `ModifierSettings` (`:64-65`) имеет и валидатор, и `RevertToDefaults`; `ColorSettings` (`:46`) и `RaidSettings` (`:75`) — тоже.
 
