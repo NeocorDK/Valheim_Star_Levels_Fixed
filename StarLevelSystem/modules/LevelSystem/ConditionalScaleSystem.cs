@@ -100,8 +100,12 @@ namespace StarLevelSystem.modules.LevelSystem {
                 if (generators.Count == 0) { continue; }
                 resolvedByBiome[kvp.Key] = generators;
                 SortedDictionary<int, float> levelupChance = new SortedDictionary<int, float>();
+                bool clamped = false;
                 foreach (var levelgen in generators) {
-                    levelupChance.MergeSortedDictionary(levelgen.GetLevelUpDefinition());
+                    LevelGeneratorResolver.MergeGeneratorCurve(levelupChance, levelgen, ref clamped);
+                }
+                if (clamped) {
+                    Logger.LogWarning($"ConditionalCreatureLevelupChance['{CurrentGlobalKey}'][{kvp.Key}]: stacked generators summed past the 100 roll ceiling and were clamped. Generators add rather than override.");
                 }
                 CurrentGlobalKeyConditionalLevelup[kvp.Key] = levelupChance;
             }

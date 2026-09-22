@@ -394,7 +394,12 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 int rolledLevel = LevelGeneratorResolver.RollLevel(spawn.LevelupGenerators, spawn.LevelupGeneratorRefs);
                 int spawnLevelOverride = rolledLevel > 0 ? rolledLevel : spawn.ForcedLevel;
                 CharacterCacheEntry cce = CompositeLazyCache.GetAndSetLocalCache(spawnChara, requiredModifiers: spawn.RequiredModifiers, leveloverride: spawnLevelOverride);
-                cce.Level = Mathf.Min(levelBonus + cce.Level, ValConfig.MaxLevel.Value);
+                // GetMaxCreatureLevel, not the bare MaxLevel setting: that one ignores the +1 star offset and
+                // every biome/creature override, so a miniboss could not reach the configured cap while a
+                // boss-flagged spawn was held to the non-boss one. m_boss is already set above, so the boss
+                // branch resolves on its own.
+                LevelSelection.SelectCreatureBiomeSettings(cgo, out _, out CreatureSpecificSetting spawnSettings, out BiomeSpecificSetting spawnBiomeSettings, out Heightmap.Biome spawnBiome);
+                cce.Level = Mathf.Min(levelBonus + cce.Level, LevelSelection.GetMaxCreatureLevel(spawnChara, spawnSettings, spawnBiomeSettings, spawnBiome));
                 // Merge the spawn's overrides onto the fully-seeded cache dictionaries rather than replacing them,
                 // so partial config (e.g. only BaseHealth) doesn't drop default keys like AttackSpeed/SpeedPerLevel
                 // that other systems index directly.

@@ -528,7 +528,7 @@ namespace StarLevelSystem.common
 
         [Description("Controls overhaul creature levels")]
         public class CreatureLevelSettings {
-            [Description("Keyed lists of level generators that can be referenced elsewhere")]
+            [Description("Keyed lists of level generators that can be referenced elsewhere. Generators within one list stack: overlapping levels have their thresholds added, capped at the 100 roll ceiling.")]
             public Dictionary<string, List<LevelGenerator>> CustomLevelupGenerators { get; set; }
 
             [Description("Controls biome specific configuration, the 'All' biome can be used to set the default for everything.")]

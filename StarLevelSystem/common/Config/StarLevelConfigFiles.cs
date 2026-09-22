@@ -33,6 +33,7 @@ namespace StarLevelSystem.common {
                 Header = LevelSettingsHeader,
                 Defaults = () => LevelSystemData.DefaultConfiguration,
                 Apply = LevelSystemData.ApplyLoaded,
+                Validate = LevelSystemData.ValidateLevelSettings,
                 AllowAdminEdit = true,
             });
 
@@ -190,6 +191,13 @@ namespace StarLevelSystem.common {
 #       LevelupCalculationStyle: Gaussian
 #       GaussianOffset: 0.25
 #   DefaultLevelupGeneratorRefs: [ late_game ]
+#
+# Several generators in one list STACK rather than override: where their level
+# ranges overlap, their thresholds are ADDED, so two 0.25 generators covering
+# the same levels behave as one 0.5. The sum is capped at 100, the top of the
+# roll scale - a level whose threshold reaches 100 can never be rolled, so
+# lower LevelUpChance on the overlapping generators rather than relying on the
+# cap. Stacking that hits the cap is logged.
 #
 # --- Table calculation style ---
 # Linear/Exponential/Gaussian compute a curve from LevelUpChance; Table instead

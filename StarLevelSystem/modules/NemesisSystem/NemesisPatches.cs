@@ -3,6 +3,7 @@ using Jotunn.Managers;
 using StarLevelSystem.common;
 using StarLevelSystem.Data;
 using StarLevelSystem.modules.Damage;
+using StarLevelSystem.modules.LevelSystem;
 using System.Collections.Generic;
 using UnityEngine;
 using static StarLevelSystem.common.DataObjects;
@@ -37,7 +38,13 @@ namespace StarLevelSystem.modules.NemesisSystem {
                 Logger.LogNemesis($"Rolling for potential Nemesis boss creation {roll} <= {NemesisSystemData.SLE_Nemesis_Settings.NemesisBossChance}");
                 if (roll > NemesisSystemData.SLE_Nemesis_Settings.NemesisBossChance) { return; }
 
-                int level = Mathf.Min(ValConfig.MaxLevel.Value, Mathf.RoundToInt(killer.m_level * UnityEngine.Random.Range(NemesisSystemData.SLE_Nemesis_Settings.NemesisBossMinLevelBonus, NemesisSystemData.SLE_Nemesis_Settings.NemesisBossMaxLevelBonus)));
+                // The miniboss spawns with IsBoss, so it lives under MaxBossLevel and whatever biome/creature
+                // overrides apply where it is created - asBoss says so, because the killer being measured is
+                // still an ordinary creature at this point. Capping on the bare MaxLevel setting instead kept
+                // every Nemesis miniboss below the boss cap it is actually allowed.
+                LevelSelection.SelectCreatureBiomeSettings(killer.gameObject, out _, out CreatureSpecificSetting killerSettings, out BiomeSpecificSetting killerBiomeSettings, out Heightmap.Biome killerBiome);
+                int maxNemesisLevel = LevelSelection.GetMaxCreatureLevel(killer, killerSettings, killerBiomeSettings, killerBiome, asBoss: true);
+                int level = Mathf.Min(maxNemesisLevel, Mathf.RoundToInt(killer.m_level * UnityEngine.Random.Range(NemesisSystemData.SLE_Nemesis_Settings.NemesisBossMinLevelBonus, NemesisSystemData.SLE_Nemesis_Settings.NemesisBossMaxLevelBonus)));
 
                 NemesisMiniboss mb = new NemesisMiniboss();
                 mb.BossSpawn = new NemesisSpawn() {

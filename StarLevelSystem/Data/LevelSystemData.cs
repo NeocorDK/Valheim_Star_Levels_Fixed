@@ -553,6 +553,149 @@ namespace StarLevelSystem.Data
         };
 
 
+        // Validate hook for LevelSettings.yaml.
+        //
+        // This was the only config file with no validator at all, while it carries the arithmetic every
+        // other system reads: a curve whose thresholds do not descend, a LevelUpChance authored as 25
+        // instead of 0.25, or a Table generator with no table for its span all produce a level
+        // distribution nobody wrote, and every one of them used to land silently.
+        //
+        // An empty document is the only ERROR - nothing downstream can do anything with it. The rest are
+        // warnings: the file is still usable, and refusing it outright would lock an admin out over one
+        // bad line in one biome.
+        internal static ValidationReport ValidateLevelSettings(CreatureLevelSettings next, CreatureLevelSettings previous) {
+            ValidationReport report = new ValidationReport();
+            if (next == null) { return report.Error("it parsed to nothing"); }
+
+            bool hasDefaultCurve = next.DefaultCreatureLevelUpChance != null && next.DefaultCreatureLevelUpChance.Count > 0;
+            bool hasDefaultGenerators = LevelGeneratorResolver.HasGenerators(next.DefaultLevelupGenerators, next.DefaultLevelupGeneratorRefs);
+            if (hasDefaultCurve == false && hasDefaultGenerators == false) {
+                // DetermineLevelRollResult walks an empty table without selecting anything and the minimum
+                // clamp turns that into level 1, so this silently removes stars from the entire world.
+                return report.Error("DefaultCreatureLevelUpChance is empty and no DefaultLevelupGenerators are configured, which puts every creature at level 1");
+            }
+            if (hasDefaultCurve) { CheckCurve(next.DefaultCreatureLevelUpChance, "DefaultCreatureLevelUpChance", report); }
+
+            HashSet<string> knownGenerators = new HashSet<string>();
+            if (next.CustomLevelupGenerators != null) {
+                foreach (KeyValuePair<string, List<LevelGenerator>> kvp in next.CustomLevelupGenerators) {
+                    knownGenerators.Add(kvp.Key);
+                }
+                foreach (KeyValuePair<string, List<LevelGenerator>> kvp in next.CustomLevelupGenerators) {
+                    CheckGenerators(kvp.Value, $"CustomLevelupGenerators['{kvp.Key}']", next, report);
+                }
+            }
+
+            CheckGenerators(next.DefaultLevelupGenerators, "DefaultLevelupGenerators", next, report);
+            CheckGeneratorRefs(next.DefaultLevelupGeneratorRefs, "DefaultLevelupGeneratorRefs", knownGenerators, report);
+
+            if (next.BiomeConfiguration != null) {
+                foreach (KeyValuePair<Heightmap.Biome, BiomeSpecificSetting> kvp in next.BiomeConfiguration) {
+                    if (kvp.Value == null) { continue; }
+                    string where = $"BiomeConfiguration[{kvp.Key}]";
+                    CheckCurve(kvp.Value.CustomCreatureLevelUpChance, $"{where}.CustomCreatureLevelUpChance", report);
+                    CheckGenerators(kvp.Value.LevelupGenerators, $"{where}.LevelupGenerators", next, report);
+                    CheckGeneratorRefs(kvp.Value.LevelupGeneratorRefs, $"{where}.LevelupGeneratorRefs", knownGenerators, report);
+                    if (kvp.Value.BiomeMinLevelOverride > 0 && kvp.Value.BiomeMaxLevelOverride > 0 && kvp.Value.BiomeMinLevelOverride > kvp.Value.BiomeMaxLevelOverride) {
+                        report.Warn($"{where} has BiomeMinLevelOverride {kvp.Value.BiomeMinLevelOverride} above BiomeMaxLevelOverride {kvp.Value.BiomeMaxLevelOverride}; the maximum wins and the minimum is unreachable.");
+                    }
+                }
+            }
+
+            if (next.CreatureConfiguration != null) {
+                foreach (KeyValuePair<string, CreatureSpecificSetting> kvp in next.CreatureConfiguration) {
+                    if (kvp.Value == null) { continue; }
+                    string where = $"CreatureConfiguration['{kvp.Key}']";
+                    CheckCurve(kvp.Value.CustomCreatureLevelUpChance, $"{where}.CustomCreatureLevelUpChance", report);
+                    CheckGenerators(kvp.Value.LevelupGenerators, $"{where}.LevelupGenerators", next, report);
+                    CheckGeneratorRefs(kvp.Value.LevelupGeneratorRefs, $"{where}.LevelupGeneratorRefs", knownGenerators, report);
+                }
+            }
+
+            if (next.ConditionalCreatureLevelupChance != null) {
+                foreach (KeyValuePair<string, Dictionary<Heightmap.Biome, ConditionalLevelupChance>> byKey in next.ConditionalCreatureLevelupChance) {
+                    if (byKey.Value == null) { continue; }
+                    foreach (KeyValuePair<Heightmap.Biome, ConditionalLevelupChance> byBiome in byKey.Value) {
+                        if (byBiome.Value == null) { continue; }
+                        string where = $"ConditionalCreatureLevelupChance['{byKey.Key}'][{byBiome.Key}]";
+                        CheckGenerators(byBiome.Value.LevelupGenerators, $"{where}.LevelupGenerators", next, report);
+                        CheckGeneratorRefs(byBiome.Value.LevelupGeneratorRefs, $"{where}.LevelupGeneratorRefs", knownGenerators, report);
+                    }
+                }
+            }
+
+            if (next.LevelupWeightTablesBySpan != null) {
+                foreach (KeyValuePair<int, SortedDictionary<int, float>> kvp in next.LevelupWeightTablesBySpan) {
+                    if (kvp.Value == null || kvp.Value.Count == 0) {
+                        report.Warn($"LevelupWeightTablesBySpan[{kvp.Key}] is empty; a Table generator with that span falls back to the Exponential curve.");
+                        continue;
+                    }
+                    if (kvp.Value.Count < kvp.Key) {
+                        report.Warn($"LevelupWeightTablesBySpan[{kvp.Key}] has only {kvp.Value.Count} entries for a {kvp.Key}-level span; a Table generator using it falls back to the Exponential curve.");
+                    }
+                    CheckCurve(kvp.Value, $"LevelupWeightTablesBySpan[{kvp.Key}]", report);
+                }
+            }
+
+            return report;
+        }
+
+        // Thresholds are consumed by DetermineLevelRollResult, which selects the FIRST level whose
+        // threshold the roll clears. A curve that does not descend therefore makes every level after the
+        // rise unreachable - the earlier, easier entry always wins.
+        private static void CheckCurve(SortedDictionary<int, float> curve, string where, ValidationReport report) {
+            if (curve == null || curve.Count == 0) { return; }
+            float previous = 0f;
+            int previousLevel = 0;
+            foreach (KeyValuePair<int, float> kvp in curve) {
+                if (kvp.Value > 100f) {
+                    report.Warn($"{where} sets level {kvp.Key} to {kvp.Value}, above the 100 roll ceiling; that level can never be rolled.");
+                } else if (kvp.Value < 0f) {
+                    report.Warn($"{where} sets level {kvp.Key} to {kvp.Value}; thresholds are a 0-100 roll requirement and a negative one always succeeds.");
+                }
+                if (previousLevel != 0 && kvp.Value > previous) {
+                    report.Warn($"{where} rises from {previous} at level {previousLevel} to {kvp.Value} at level {kvp.Key}; thresholds must descend, so level {kvp.Key} is unreachable.");
+                }
+                previous = kvp.Value;
+                previousLevel = kvp.Key;
+            }
+        }
+
+        private static void CheckGenerators(List<LevelGenerator> generators, string where, CreatureLevelSettings settings, ValidationReport report) {
+            if (generators == null) { return; }
+            for (int i = 0; i < generators.Count; i++) {
+                LevelGenerator gen = generators[i];
+                if (gen == null) { continue; }
+                string label = $"{where}[{i}]";
+                if (gen.LevelUpChance < 0f || gen.LevelUpChance > 1f) {
+                    // GetLevelUpDefinition clamps LevelUpChance * 100 into 0.01..100, so 25 reads as 100
+                    // and 0.25 reads as 25 - a factor-of-four difference with no complaint.
+                    report.Warn($"{label} has LevelUpChance {gen.LevelUpChance}; it is a 0-1 fraction (0.25 means 25%) and is clamped, so anything above 1 behaves as 1.");
+                }
+                if (gen.MinLevel > gen.MaxLevel) {
+                    report.Warn($"{label} has MinLevel {gen.MinLevel} above MaxLevel {gen.MaxLevel}; they are swapped on use, so the curve is not the one written.");
+                }
+                if (gen.MinLevel < 1) {
+                    report.Warn($"{label} has MinLevel {gen.MinLevel}; levels start at 1 (level 1 has no stars).");
+                }
+                if (gen.LevelupCalculationStyle != LevelupCalculationStyle.Table) { continue; }
+                int span = Mathf.Abs(gen.MaxLevel - gen.MinLevel) + 1;
+                SortedDictionary<int, float> shape = null;
+                settings.LevelupWeightTablesBySpan?.TryGetValue(span, out shape);
+                if (shape == null || shape.Count < span) {
+                    report.Warn($"{label} uses the Table style but LevelupWeightTablesBySpan has no {span}-entry table for its span; it falls back to the Exponential curve.");
+                }
+            }
+        }
+
+        private static void CheckGeneratorRefs(List<string> refs, string where, HashSet<string> known, ValidationReport report) {
+            if (refs == null) { return; }
+            foreach (string name in refs) {
+                if (name == null || known.Contains(name)) { continue; }
+                report.Warn($"{where} names '{name}', which CustomLevelupGenerators does not define." + ConfigValidation.SuggestKey(name, known));
+            }
+        }
+
         // Everything that has to happen once new level settings exist, whatever produced them -- a hand
         // edit, a server broadcast, or the in-game editor. Registered as the Apply hook for
         // LevelSettings.yaml, so all three routes run identically.

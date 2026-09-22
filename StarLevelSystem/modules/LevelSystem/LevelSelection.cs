@@ -23,8 +23,11 @@ namespace StarLevelSystem.modules.LevelSystem {
         // sitting at exactly the maximum re-rolls a fresh random level on every cache build while nothing
         // ever writes the correction back to its ZDO - which turns the per-frame EnemyHud cache check into
         // a permanent invalidate/rebuild loop.
-        public static int GetMaxCreatureLevel(Character character, CreatureSpecificSetting creature_settings = null, BiomeSpecificSetting biome_settings = null, Heightmap.Biome? biome = null) {
-            int max_level = (character != null && character.IsBoss()) ? ValConfig.MaxBossLevel.Value : ValConfig.MaxLevel.Value;
+        // asBoss overrides the character's own boss flag, for callers that are about to promote an ordinary
+        // creature into a boss and need the cap the creature will live under, not the one it has now.
+        public static int GetMaxCreatureLevel(Character character, CreatureSpecificSetting creature_settings = null, BiomeSpecificSetting biome_settings = null, Heightmap.Biome? biome = null, bool? asBoss = null) {
+            bool isBoss = asBoss ?? (character != null && character.IsBoss());
+            int max_level = isBoss ? ValConfig.MaxBossLevel.Value : ValConfig.MaxLevel.Value;
             if (biome_settings != null && biome_settings.BiomeMaxLevelOverride != 0) { max_level = biome_settings.BiomeMaxLevelOverride; }
             if (creature_settings != null && creature_settings.CreatureMaxLevelOverride > -1) { max_level = creature_settings.CreatureMaxLevelOverride; }
             int resolved = max_level + 1;
