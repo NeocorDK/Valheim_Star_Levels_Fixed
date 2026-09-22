@@ -408,8 +408,9 @@ namespace StarLevelSystem.modules.Raids
         }
 
         // The save file has had two shapes. Current is a RaidSaveState; everything written before that is a
-        // bare platformID -> PlayerRaidData map, which the shared deserializer rejects outright (it does not
-        // ignore unmatched properties), so the legacy read only runs once the wrapper read has failed.
+        // bare platformID -> PlayerRaidData map. Read as a RaidSaveState it yields an object with no
+        // Players - the shared deserializer ignores keys it has no member for - so the Players null check
+        // below, not the catch, is what routes a legacy file to the legacy read.
         private static RaidSaveState ParseRegistry(string yaml) {
             if (string.IsNullOrEmpty(yaml)) { return null; }
             try {

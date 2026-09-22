@@ -225,7 +225,19 @@ namespace StarLevelSystem.common {
             try {
                 file.Path = Path.Combine(ConfigDirectory(file.SubFolder), file.FileName);
                 ByPath[file.Path] = file;
+            } catch (Exception e) {
+                // Without a path there is nothing to register, watch or send. Nothing below can run.
+                Logger.LogError($"Could not resolve a path for {file.FileName}, it will not be loaded or synchronised: {e}");
+                return;
+            }
 
+            // Disk access is its own try. A permissions problem, a locked file or a throwing Defaults()
+            // used to skip the registration below, which left file.Rpc null for the rest of the session:
+            // Broadcast became a no-op and no initial sync was registered, so every joining client got
+            // NOTHING for this file and ran on its own defaults, behind a single line of log. The file is
+            // registered either way now - peers get whatever this machine ended up holding, which is the
+            // built-in defaults when the load never happened.
+            try {
                 if (File.Exists(file.Path) == false) {
                     Logger.LogDebug($"{file.FileName} missing, writing this mod's built-in defaults.");
                     RestoreDefaults(file);
@@ -236,13 +248,17 @@ namespace StarLevelSystem.common {
                 }
 
                 file.LoadFrom(File.Exists(file.Path) ? File.ReadAllText(file.Path) : "", ConfigOrigin.Startup);
-
-                ConfigNetwork.RegisterFile(file);
-                if (file.Watch) { ConfigFileWatcher.Register(file.Path, OnWatchedFileChanged); }
             } catch (Exception e) {
                 // One unusable file must not take Awake down with it -- every other config, and the rest
                 // of the mod, still loads.
-                Logger.LogError($"Could not prepare {file.FileName}: {e}");
+                Logger.LogError($"Could not load {file.FileName}; this session runs on the built-in defaults for it: {e}");
+            }
+
+            try {
+                ConfigNetwork.RegisterFile(file);
+                if (file.Watch) { ConfigFileWatcher.Register(file.Path, OnWatchedFileChanged); }
+            } catch (Exception e) {
+                Logger.LogError($"Could not register {file.FileName} for synchronisation; peers will not receive it: {e}");
             }
         }
 

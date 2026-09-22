@@ -28,7 +28,35 @@ namespace StarLevelSystem.common
         // ProtectionRuleYamlConverter is registered on both so a protection entry can be written and
         // read as either a bare action scalar or a full mapping; it only claims ProtectionRule, so no
         // other config type is affected.
-        public static IDeserializer yamlDeserializer = new DeserializerBuilder().WithCaseInsensitivePropertyMatching().WithTypeConverter(new ProtectionRuleYamlConverter()).Build();
+        //
+        // This deserializer reads NETWORK payloads, not files: raid requests, miniboss adds, map pins,
+        // kill batches. Its inputs therefore come from another machine that may be running a different
+        // build of the mod, where one added field or one renamed enum member is enough to throw. It was
+        // built without the two things that make that survivable - IgnoreUnmatchedProperties and
+        // TolerantEnumConverter, both of which YamlFormat has applied to the config files all along - and
+        // every caller parsed without a try/catch, so the exception came out of a coroutine.
+        public static IDeserializer yamlDeserializer = new DeserializerBuilder().WithCaseInsensitivePropertyMatching().IgnoreUnmatchedProperties().WithTypeConverter(new ProtectionRuleYamlConverter()).WithTypeConverter(new TolerantEnumConverter()).Build();
+
+        // Parse a network payload without letting a malformed one out of a coroutine. what names the
+        // payload in the log, since by definition the sender is the one who has to fix it.
+        public static bool TryDeserialize<T>(string yaml, string what, out T value) {
+            value = default;
+            if (string.IsNullOrWhiteSpace(yaml)) {
+                Logger.LogWarning($"Received an empty {what} payload; ignoring it.");
+                return false;
+            }
+            try {
+                value = yamlDeserializer.Deserialize<T>(yaml);
+            } catch (Exception e) {
+                Logger.LogWarning($"Could not read a {what} payload, ignoring it. The sender may be running a different version of this mod: {e.Message}");
+                return false;
+            }
+            if (value == null) {
+                Logger.LogWarning($"A {what} payload parsed to nothing; ignoring it.");
+                return false;
+            }
+            return true;
+        }
         // DisableAliases matters because the in-game editor serializes with this and hands the exact bytes
         // to YamlConfigManager.ApplyEdited, which writes them to the admin-facing config file. Without it
         // an object reused by reference emits &a1 / *a1 anchors, which read as file corruption to anyone

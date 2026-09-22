@@ -1,5 +1,6 @@
 using Jotunn.Entities;
 using System;
+using System.Collections.Generic;
 using YamlDotNet.Core;
 
 #pragma warning disable IDE0130
@@ -136,6 +137,12 @@ namespace StarLevelSystem.common {
             return Value == null ? SerializeDefaults() : EffectiveFormat.Serializer.Serialize(Value);
         }
 
+        // Bad enum values collected by the last Deserialize call. They are warnings rather than log lines
+        // because a misspelled enum is silently inert config: the converter substitutes a fallback and the
+        // file loads, so without this the editor's "applied cleanly" was telling the truth about the parse
+        // and not about the result.
+        private readonly List<string> EnumProblems = new List<string>();
+
         internal override ValidationReport DryRun(string yaml, out string parseError) {
             parseError = null;
 
@@ -160,13 +167,22 @@ namespace StarLevelSystem.common {
                 }
             }
 
-            if (Validate == null) { return new ValidationReport(); }
-
-            try {
-                return Validate(parsed, Value) ?? new ValidationReport();
-            } catch (Exception e) {
-                return new ValidationReport().Error($"the validator threw: {e.Message}");
+            ValidationReport dryReport;
+            if (Validate == null) {
+                dryReport = new ValidationReport();
+            } else {
+                try {
+                    dryReport = Validate(parsed, Value) ?? new ValidationReport();
+                } catch (Exception e) {
+                    dryReport = new ValidationReport().Error($"the validator threw: {e.Message}");
+                }
             }
+            AddEnumProblems(dryReport);
+            return dryReport;
+        }
+
+        private void AddEnumProblems(ValidationReport report) {
+            for (int i = 0; i < EnumProblems.Count; i++) { report.Warn(EnumProblems[i]); }
         }
 
         internal override ValidationReport Revalidate() {
@@ -225,6 +241,7 @@ namespace StarLevelSystem.common {
                 }
             }
 
+            AddEnumProblems(report);
             LastReport = report;
             LogReport(report);
             if (report.HasErrors) {
@@ -256,40 +273,76 @@ namespace StarLevelSystem.common {
         // swallow the typo and never mention it.
         private T Deserialize(string yaml, out string reason) {
             reason = null;
+            EnumProblems.Clear();
             YamlFormat format = EffectiveFormat;
 
             try {
+                TolerantEnumConverter.BeginCollecting();
                 T strict = format.Deserializer.Deserialize<T>(yaml);
+                EnumProblems.AddRange(TolerantEnumConverter.EndCollecting());
                 // YamlDotNet returns null for a document with no content WITHOUT throwing, so a caller's
                 // try/catch never sees it. Handled here so no config class has to remember.
                 if (strict == null) { reason = "it is empty or contains only comments"; }
                 return strict;
             } catch (YamlException strictError) {
+                // The strict pass stopped partway, so whatever it collected is an incomplete view of the
+                // document. Dropped in favour of the tolerant pass's full one.
+                TolerantEnumConverter.EndCollecting();
                 if (UnknownKeys == UnknownKeyPolicy.Strict) {
                     reason = Describe(strictError);
                     return null;
                 }
 
                 try {
+                    TolerantEnumConverter.BeginCollecting();
                     T tolerant = format.TolerantDeserializer.Deserialize<T>(yaml);
+                    EnumProblems.AddRange(TolerantEnumConverter.EndCollecting());
                     if (tolerant == null) {
                         reason = "it is empty or contains only comments";
                         return null;
                     }
                     if (UnknownKeys == UnknownKeyPolicy.WarnAndContinue) {
-                        Logger.LogWarning($"{FileName} {Describe(strictError)} That setting was ignored; " +
-                            "the rest of the file loaded normally.");
+                        ReportUnknownKeys(yaml, format, strictError);
                     }
                     return tolerant;
                 } catch (YamlException tolerantError) {
+                    TolerantEnumConverter.EndCollecting();
                     // Not an unknown key -- the document is genuinely malformed.
                     reason = Describe(tolerantError);
                     return null;
                 }
             } catch (Exception other) {
+                TolerantEnumConverter.EndCollecting();
                 reason = other.Message;
                 return null;
             }
+        }
+
+        // The strict parser stops at the first key it does not recognise, so this used to name exactly one
+        // problem however many the file had: an admin with five typos fixed them one restart at a time,
+        // and the four it dropped left settings quietly inert. UnknownKeyScan walks the whole document
+        // against T instead, so every one of them is named in a single pass, each with the "did you mean"
+        // ConfigValidation.SuggestKey was written to provide.
+        private void ReportUnknownKeys(string yaml, YamlFormat format, YamlException strictError) {
+            List<string> problems = null;
+            try {
+                object graph = format.TolerantDeserializer.Deserialize<object>(yaml);
+                problems = UnknownKeyScan.Find(graph, typeof(T));
+            } catch (Exception e) {
+                Logger.LogDebug($"{FileName}: could not scan for unknown keys: {e.Message}");
+            }
+
+            if (problems == null || problems.Count == 0) {
+                // The strict pass objected to something the scan does not cover -- a value the shape of
+                // which T cannot take, say. Report what the parser said.
+                Logger.LogWarning($"{FileName} {Describe(strictError)} That setting was ignored; " +
+                    "the rest of the file loaded normally.");
+                return;
+            }
+
+            Logger.LogWarning($"{FileName} has {problems.Count} unrecognised setting(s), all ignored; " +
+                $"the rest of the file loaded normally:{Environment.NewLine}  " +
+                string.Join(Environment.NewLine + "  ", problems.ToArray()));
         }
 
         private bool ApplySchemaVersion(ref T parsed, out string problem, out bool changed) {

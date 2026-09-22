@@ -635,7 +635,7 @@ namespace StarLevelSystem.common {
         // the originating client) and directly on a host/listen-server, where GetServerPeer() is
         // null so there is no server peer to send an RPC to. Pass ZNet.GetUID() to exclude nobody.
         internal static void ApplyNemesisBossAdd(string yaml, long senderToExclude) {
-            NemesisMiniboss nemesisBoss = DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml);
+            if (DataObjects.TryDeserialize(yaml, "Nemesis miniboss", out NemesisMiniboss nemesisBoss) == false) { return; }
             NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(nemesisBoss);
             // Through the config manager: a bare File.WriteAllText dropped the documented header and left
             // the watcher stamp stale, so the change reached peers only by accident on the next poll.
@@ -820,8 +820,7 @@ namespace StarLevelSystem.common {
         // Server handler for ZoneKillReportRPC: a remote client reported a batch of death positions.
         internal static IEnumerator OnServerReceiveZoneKills(long sender, ZPackage package) {
             if (ZNet.instance == null || !ZNet.instance.IsServer()) { yield break; }
-            List<SerializableVector3> deaths = DataObjects.yamlDeserializer.Deserialize<List<SerializableVector3>>(package.ReadString());
-            if (deaths == null) { yield break; }
+            if (DataObjects.TryDeserialize(package.ReadString(), "zone kill report", out List<SerializableVector3> deaths) == false) { yield break; }
             ZoneScaleSystemData.ApplyDeaths(deaths);
             yield return null;
         }
@@ -829,8 +828,8 @@ namespace StarLevelSystem.common {
         private static IEnumerator OnClientReceiveMiniBossAdd(long sender, ZPackage package) {
             var yaml = package.ReadString();
             // Dedupe by serialized form (reference-equality Contains never matches a deserialized copy).
-            if (FindMinibossIndex(yaml) < 0) {
-                NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(DataObjects.yamlDeserializer.Deserialize<NemesisMiniboss>(yaml));
+            if (FindMinibossIndex(yaml) < 0 && DataObjects.TryDeserialize(yaml, "Nemesis miniboss", out NemesisMiniboss added)) {
+                NemesisSystemData.SLE_Nemesis_Settings.AvailableMiniBosses.Add(added);
             }
             // Add in a check if we want to write the server config to disk or use it virtually
             yield return null;
@@ -848,7 +847,9 @@ namespace StarLevelSystem.common {
 
         private static IEnumerator OnClientReceiveRaidStart(long sender, ZPackage package) {
             var yaml = package.ReadString();
-            NetworkRaidRequest raidNetRequest = DataObjects.yamlDeserializer.Deserialize<NetworkRaidRequest>(yaml);
+            // An empty or unreadable payload used to be dereferenced on the next line, throwing out of this
+            // coroutine rather than being ignored.
+            if (DataObjects.TryDeserialize(yaml, "raid start request", out NetworkRaidRequest raidNetRequest) == false) { yield break; }
             Vector3 raidPosition = Player.m_localPlayer != null ? Player.m_localPlayer.transform.position : Vector3.zero;
             if (raidNetRequest.RaidPostion != Vector3.zero) {
                 raidPosition = raidNetRequest.RaidPostion;
@@ -920,7 +921,7 @@ namespace StarLevelSystem.common {
 
         private static IEnumerator OnServerReceivePlayerPrivateKeys(long sender, ZPackage package) {
             var yaml = package.ReadString();
-            List<string> playerKeys = DataObjects.yamlDeserializer.Deserialize<List<string>>(yaml);
+            if (DataObjects.TryDeserialize(yaml, "player private keys", out List<string> playerKeys) == false) { yield break; }
             RaidControl.UpdateOrAddPlayerPrivateKeys(sender, playerKeys);
             yield break;
         }

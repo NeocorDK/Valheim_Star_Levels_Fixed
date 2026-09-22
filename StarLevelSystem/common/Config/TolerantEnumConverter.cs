@@ -23,6 +23,27 @@ namespace StarLevelSystem.common {
     internal class TolerantEnumConverter : IYamlTypeConverter {
         private static readonly Dictionary<Type, object> fallbacks = new Dictionary<Type, object>();
 
+        // While a collector is set, bad values are handed to the caller instead of logged.
+        //
+        // A bad enum used to be logged and nothing more, so it never reached the ValidationReport: the
+        // editor's upload path asked the server whether a document was clean, got an empty warning list
+        // back and told the admin it had applied perfectly, while a misspelled Faction was quietly
+        // turning raid creatures into allies. The same logging also fired during DryRun, filling the log
+        // with warnings about candidate documents that were then rejected.
+        [ThreadStatic] private static List<string> collector;
+
+        internal static void BeginCollecting() {
+            collector = new List<string>();
+        }
+
+        // Always paired with BeginCollecting, including on the failure paths - a collector left set would
+        // swallow the warnings from every later parse on this thread.
+        internal static List<string> EndCollecting() {
+            List<string> collected = collector;
+            collector = null;
+            return collected ?? new List<string>();
+        }
+
         // Override the value used when a scalar does not parse, for an enum whose zero member is not the
         // harmless one.
         internal static void SetFallback(Type enumType, object fallback) {
@@ -50,8 +71,9 @@ namespace StarLevelSystem.common {
             }
 
             object fallback = FallbackFor(type);
-            Logger.LogWarning($"line {scalar.Start.Line}: '{raw}' is not a valid {type.Name}. Using {fallback}. " +
-                $"Valid values: {string.Join(", ", Enum.GetNames(type))}.");
+            string problem = $"line {scalar.Start.Line}: '{raw}' is not a valid {type.Name}. Using {fallback}. " +
+                $"Valid values: {string.Join(", ", Enum.GetNames(type))}.";
+            if (collector != null) { collector.Add(problem); } else { Logger.LogWarning(problem); }
             return fallback;
         }
 
