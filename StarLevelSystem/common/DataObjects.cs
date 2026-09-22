@@ -960,7 +960,13 @@ namespace StarLevelSystem.common
         }
 
         public class NetworkRaidRequest {
-            public SerializableVector3 RaidPostion { get; set; } = Vector3.zero;
+            // The property is spelled correctly; the wire name is not, and stays that way on purpose. This
+            // travels between machines that may be running different releases of the mod, and renaming the
+            // serialized key would make a new server read an old client's raid request as position zero -
+            // dropping the raid onto whoever happened to receive it. The alias costs nothing and keeps the
+            // payload byte-identical across versions.
+            [YamlMember(Alias = "RaidPostion")]
+            public SerializableVector3 RaidPosition { get; set; } = Vector3.zero;
             public RaidDefinition Raid { get; set; }
         }
 

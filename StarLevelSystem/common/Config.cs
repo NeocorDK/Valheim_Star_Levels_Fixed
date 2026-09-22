@@ -385,22 +385,24 @@ namespace StarLevelSystem.common {
             MaxLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;
             MaxBossLevel = BindServerConfig("LevelSystem", "MaxBossLevel", 10, "The highest LEVEL a boss can reach (level 1 has no stars). A biome's BiomeMaxLevelOverride takes precedence over this, so with the shipped biome caps a boss is limited by its biome rather than by this value.", false, 1, 200);
             MaxBossLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;
-            OverLevelCreaturesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverlevedCreaturesGetRerolledOnLoad", true, "Rerolls creature levels which are above maximum defined level, when those creatures are loaded. This will automatically clean up over leveled creatures if you reduce the max level.");
+            OverLevelCreaturesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverLevelCreaturesGetRerolledOnLoad",
+                MigratedValue("LevelSystem", "OverlevedCreaturesGetRerolledOnLoad", "OverLevelCreaturesGetRerolledOnLoad", true),
+                "Rerolls creature levels which are above maximum defined level, when those creatures are loaded. This will automatically clean up over leveled creatures if you reduce the max level.");
             OverLevelTamesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverLevelTamesGetRerolledOnLoad", false, "Rerolls tamed creatures that have a level is above the maximum defined level. This includes biome specific level settings.");
             EnableCreatureScalingPerLevel = BindServerConfig("LevelSystem", "EnableCreatureScalingPerLevel", true, "Enables started creatures to get larger for each star");
             EnableCreatureScalingPerLevel.SettingChanged += SizeModifications.StarLevelScaleChanged;
 
             EnableDistanceLevelScalingBonus = BindServerConfig("LevelSystem", "EnableDistanceLevelScalingBonus", true, "Creatures further away from the center of the world have a higher chance to levelup, this is a bonus applied to existing creature/biome configuration.");
-            EnableMapRingsForDistanceBonus = BindServerConfig("LevelSystem", "EnableMapRingsForDistanceBonus", true, "Enables map rings to show distance levels, this is a visual aid to help you see how far away from the center of the world you are.");
+            EnableMapRingsForDistanceBonus = BindClientConfig("LevelSystem", "EnableMapRingsForDistanceBonus", true, "Enables map rings to show distance levels, this is a visual aid to help you see how far away from the center of the world you are.");
             EnableMapRingsForDistanceBonus.SettingChanged += DistanceScaleSystem.UpdateMapRingEnableSettingOnChange;
-            MapRingsAboveFog = BindServerConfig("LevelSystem", "MapRingsAboveFog", false, "When enabled, distance map rings draw above the map fog so they are visible even in unexplored areas. When disabled, rings sit below the fog and only appear once an area has been explored.");
+            MapRingsAboveFog = BindClientConfig("LevelSystem", "MapRingsAboveFog", false, "When enabled, distance map rings draw above the map fog so they are visible even in unexplored areas. When disabled, rings sit below the fog and only appear once an area has been explored.");
             MapRingsAboveFog.SettingChanged += DistanceScaleSystem.UpdateMapRingFogSettingOnChange;
             DistanceBonusIsFromStarterTemple = BindServerConfig("LevelSystem", "DistanceBonusIsFromStarterTemple", false, "When enabled the distance bonus is calculated from the starter temple instead of world center, typically this makes little difference. But can help ensure your starting area is more correctly calculated.");
             DistanceBonusIsFromStarterTemple.SettingChanged += DistanceScaleSystem.OnRingCenterChanged;
             // Location Reset's distance bands measure from the same centre, but run server-side where
             // the map-ring handler above bails out, so they need their own re-resolve + invalidation.
             DistanceBonusIsFromStarterTemple.SettingChanged += modules.LocationReset.ZoneRates.OnCenterChanged;
-            DistanceRingColorOptions = BindServerConfig("LevelSystem", "DistanceRingColorOptions", "White,Blue,Teal,Green,Yellow,Purple,Orange,Pink,Purple,Red,Grey", "The colors that distance rings will use, if there are more rings than colors, the color pattern will be repeated. (Optional, use an HTML hex color starting with # to have a custom color.) Available options: Red, Orange, Yellow, Green, Teal, Blue, Purple, Pink, Gray, Brown, Black");
+            DistanceRingColorOptions = BindClientConfig("LevelSystem", "DistanceRingColorOptions", "White,Blue,Teal,Green,Yellow,Purple,Orange,Pink,Purple,Red,Grey", "The colors that distance rings will use, if there are more rings than colors, the color pattern will be repeated. (Optional, use an HTML hex color starting with # to have a custom color.) Available options: Red, Orange, Yellow, Green, Teal, Blue, Purple, Pink, Gray, Brown, Black");
             DistanceRingColorOptions.SettingChanged += DistanceScaleSystem.UpdateMapColorSettingsOnChange;
             // Renamed from MiniMapRingGeneratorUpdatesPerFrame, which was never read by anything and
             // whose default of 1000 sat outside the 0-150 range the int overload attaches by default -
@@ -422,7 +424,9 @@ namespace StarLevelSystem.common {
             EnemyDamageLevelMultiplier = BindServerConfig("LevelSystem", "EnemyDamageLevelMultiplier", 0.1f, "The amount of damage that each level gives a creatures, vanilla is 0.5x (eg 50% more damage each level).", false, 0.00f, 2f);
             BossEnemyHealthMultiplier = BindServerConfig("LevelSystem", "BossEnemyHealthMultiplier", 0.3f, "Flat multiplier on boss base health, applied once and NOT per level. The default of 0.3 therefore gives a boss 30% of its vanilla health; use 1 to leave bosses alone.", false, 0.01f, 5f);
             BossEnemyDamageMultiplier = BindServerConfig("LevelSystem", "BossEnemyDamageMultiplier", 0.02f, "The amount of damage that each level gives a boss. 1 is 100% more damage per level.", false, 0f, 5f);
-            RandomizeTameChildrenLevels = BindServerConfig("LevelSystem", "RandomizeTameLevels", false, "Randomly rolls bred creature levels, instead of inheriting from parent.");
+            RandomizeTameChildrenLevels = BindServerConfig("LevelSystem", "RandomizeTameChildrenLevels",
+                MigratedValue("LevelSystem", "RandomizeTameLevels", "RandomizeTameChildrenLevels", false),
+                "Randomly rolls bred creature levels, instead of inheriting from parent. Its sibling is RandomizeTameChildrenModifiers.");
             RandomizeTameChildrenModifiers = BindServerConfig("LevelSystem", "RandomizeTameChildrenModifiers", true, "Randomly rolls bred creatures modifiers instead of inheriting from a parent");
             SpawnMultiplicationAppliesToTames = BindServerConfig("LevelSystem", "SpawnMultiplicationAppliesToTames", false, "Spawn multipliers set on creature or biome will apply to produced tames when enabled.");
             BossCreaturesNeverSpawnMultiply = BindServerConfig("LevelSystem", "BossCreaturesNeverSpawnMultiply", true, "Boss creatures never have spawn multipliers applied to them.");
@@ -513,15 +517,15 @@ namespace StarLevelSystem.common {
             ZoneDecayLevelsPerHour = BindServerConfig("ZoneScaling", "ZoneDecayLevelsPerHour", 0.25f, "How many zone levels decay per hour. 0 disables decay entirely; lower values decay slower, higher values faster. Default 0.25 = one level lost every four hours. Whether that hour is wall-clock time or time actually spent in the world is set by ZoneDecayClock.", false, 0f, 50f);
             ZoneDecayClock = BindServerConfig("ZoneScaling", "ZoneDecayClock", ZoneDecayClockSource.RealTime.ToString(), "Which clock zone level decay is measured against. RealTime is the wall clock, so zones keep decaying while nobody is playing and a world left alone overnight comes back several levels lower. GameTime is the world's own time, which only advances while the world is actually being played, so nothing decays while you are logged out or while a dedicated server sits empty. Switching between them re-bases every zone's decay timer within 15 minutes; zone levels themselves are never lost by the switch.", new AcceptableValueList<string>(ZoneDecayClockSource.RealTime.ToString(), ZoneDecayClockSource.GameTime.ToString()));
             ZoneDecayClock.SettingChanged += ZoneScaleSystemData.OnDecayClockChanged;
-            EnableZoneMapOverlay = BindServerConfig("ZoneScaling", "EnableZoneMapOverlay", true, "Draws zone boundaries on the minimap, colored by zone level.");
-            ZoneOverlayAboveFog = BindServerConfig("ZoneScaling", "ZoneOverlayAboveFog", false, "When enabled, zone boundaries draw above the map fog so they are visible even in unexplored areas. When disabled, boundaries sit below the fog and only appear once an area has been explored.");
+            EnableZoneMapOverlay = BindClientConfig("ZoneScaling", "EnableZoneMapOverlay", true, "Draws zone boundaries on the minimap, colored by zone level.");
+            ZoneOverlayAboveFog = BindClientConfig("ZoneScaling", "ZoneOverlayAboveFog", false, "When enabled, zone boundaries draw above the map fog so they are visible even in unexplored areas. When disabled, boundaries sit below the fog and only appear once an area has been explored.");
             ZoneOverlayAboveFog.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayFogOnChange;
             MinZoneSize = BindServerConfig("ZoneScaling", "MinZoneSize", 1000f, "Minimum landmass size (meters, on both axes) for an island to be split into zones. Islands smaller than this get no zones. Changes apply when zones are rebuilt (sls-zone-rebuild).", false, 500f, 10000f);
             MaxZoneSize = BindServerConfig("ZoneScaling", "MaxZoneSize", 3000f, "Side length (meters) of each square zone cell. Land is tiled onto a global grid of this size so zones never overlap. Changes apply when zones are rebuilt (sls-zone-rebuild).", false, 1000f, 10000f);
             KillReportFlushIntervalSeconds = BindServerConfig("ZoneScaling", "KillReportFlushIntervalSeconds", 10f, "The number of seconds between update checks for zone kill counters. Must stay above zero: WaitForSeconds(0) yields a single frame, turning the drain into a per-frame loop that also sends an RPC from every client.", true, 0.5f, 600f);
-            ZoneOverlayColorOptions = BindServerConfig("ZoneScaling", "ZoneOverlayColorOptions", "Grey,White,LightYellow,Yellow,LightOrange,Orange,DarkOrange,LightRed,Red,DarkRed,LightPurple,Purple,DarkPurple", "The colors used for zone boundaries on the minimap, walked by zone level (higher levels step further along the list, wrapping if there are more levels than colors). (Optional, use an HTML hex color starting with # to have a custom color.) Available options: LightYellow, Yellow, LightOrange, Orange, DarkOrange, LightRed, Red, DarkRed, LightPurple, Purple, DarkPurple, Green, Teal, Blue, Pink, Gray, Brown, Black, White");
+            ZoneOverlayColorOptions = BindClientConfig("ZoneScaling", "ZoneOverlayColorOptions", "Grey,White,LightYellow,Yellow,LightOrange,Orange,DarkOrange,LightRed,Red,DarkRed,LightPurple,Purple,DarkPurple", "The colors used for zone boundaries on the minimap, walked by zone level (higher levels step further along the list, wrapping if there are more levels than colors). (Optional, use an HTML hex color starting with # to have a custom color.) Available options: LightYellow, Yellow, LightOrange, Orange, DarkOrange, LightRed, Red, DarkRed, LightPurple, Purple, DarkPurple, Green, Teal, Blue, Pink, Gray, Brown, Black, White");
             ZoneOverlayColorOptions.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayColorsOnChange;
-            ZoneOverlayColorTransparency = BindServerConfig("ZoneScaling", "ZoneOverlayColorTransparency", 0.5f, "Transparency value of the color used for zone boundaries.", true, 0f, 1f);
+            ZoneOverlayColorTransparency = BindClientConfig("ZoneScaling", "ZoneOverlayColorTransparency", 0.5f, "Transparency value of the color used for zone boundaries.", true, 0f, 1f);
             ZoneOverlayColorTransparency.SettingChanged += ZoneScaleSystem.UpdateZoneOverlayColorsOnChange;
 
             MaxMajorModifiersPerCreature = BindServerConfig("Modifiers", "MaxMajorModifiersPerCreature", 1, "The default number of major modifiers that a creature can have.", false, 0, 20);
@@ -541,29 +545,25 @@ namespace StarLevelSystem.common {
             LimitCreatureModifierPrefixes.SettingChanged += CreatureModifiersData.ModifierNamingChanged;
             MinorModifiersFirstInName = BindServerConfig("Modifiers", "MinorModifiersFirstInName", false, "Enables or disables ordering of modifiers for naming. If enabled, minor modifiers will be sorted first eg: Fast Poisonous");
             MinorModifiersFirstInName.SettingChanged += CreatureModifiersData.ModifierNamingChanged;
-            ModifierIconDisplayStyle = BindServerConfig("Modifiers", "ModifierIconDisplayStyle", ModifierDisplayStyle.Stars.ToString(), "Style to display modifiers as on the creature HUD. Icons = detailed modifier icons, Stars = star-shaped modifier icons, None = plain default stars.", new AcceptableValueList<string>(ModifierDisplayStyle.Icons.ToString(), ModifierDisplayStyle.Stars.ToString(), ModifierDisplayStyle.None.ToString()));
+            ModifierIconDisplayStyle = BindClientConfig("Modifiers", "ModifierIconDisplayStyle", ModifierDisplayStyle.Stars.ToString(), "Style to display modifiers as on the creature HUD. Icons = detailed modifier icons, Stars = star-shaped modifier icons, None = plain default stars.", new AcceptableValueList<string>(ModifierDisplayStyle.Icons.ToString(), ModifierDisplayStyle.Stars.ToString(), ModifierDisplayStyle.None.ToString()));
             CreatureModifiersData.ParseModifierDisplayStyle();
             ModifierIconDisplayStyle.SettingChanged += CreatureModifiersData.ModifierDisplayStyleChanged;
             EvolvingCanRollNewModifiers = BindServerConfig("Modifiers", "EvolvingCanRollNewModifiers", false, "When enabled, evolving creatures have a chance to gain new modifiers when they evolve.");
             EvolvingChanceToRollNewModifier = BindServerConfig("Modifiers", "EvolvingChanceToRollNewModifier", 0.15f, "Chance that an evolving creature will gain a new major, minor, or boss modifier (based on creature type), up to the configured modifier limit.", false, 0f, 1f);
 
-            EnemyHealthbarScalarX = BindServerConfig("UI", "EnemyHealthbarScalarX", 1f, "Horizontal scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0.1f, 4f);
+            EnemyHealthbarScalarX = BindClientConfig("UI", "EnemyHealthbarScalarX", 1f, "Horizontal scale of the health bar for typical enemies. This does not impact bosses or players.", false, 0.1f, 4f);
             EnemyHealthbarScalarX.SettingChanged += UIHudControl.OnEnemyHudConfigChanged;
-            EnemyHealthbarScalarY = BindServerConfig("UI", "EnemyHealthbarScalarY", 1.75f, "Vertical scale of the health bar for typical enemies. It also scales the health number, so zero would give a zero-sized font. This does not impact bosses or players.", false, 0.1f, 4f);
+            EnemyHealthbarScalarY = BindClientConfig("UI", "EnemyHealthbarScalarY", 1.75f, "Vertical scale of the health bar for typical enemies. It also scales the health number, so zero would give a zero-sized font. This does not impact bosses or players.", false, 0.1f, 4f);
             EnemyHealthbarScalarY.SettingChanged += UIHudControl.OnEnemyHudConfigChanged;
-            UseCustomHealthFont = Config.Bind("UI", "UseCustomHealthFont", false, "[Client side Config] Enable to use a custom version of the Norse font.");
-            HealthDisplayFontSizeAdjustment = BindServerConfig("UI", "HealthDisplayFontSizeAdjustment", 0.8f, "Font size scale for the number on creature health bars, as a fraction: 0.8 means 80%. Not a percentage - 80 here would give a 640pt font.", false, 0.1f, 4f);
+            UseCustomHealthFont = BindClientConfig("UI", "UseCustomHealthFont", false, "Enable to use a custom version of the Norse font.");
+            HealthDisplayFontSizeAdjustment = BindClientConfig("UI", "HealthDisplayFontSizeAdjustment", 0.8f, "Font size scale for the number on creature health bars, as a fraction: 0.8 means 80%. Not a percentage - 80 here would give a 640pt font.", false, 0.1f, 4f);
             HealthDisplayFontSizeAdjustment.SettingChanged += UIHudControl.OnEnemyHudConfigChanged;
-            EnableEnemyHealthbarNumberDisplay = BindServerConfig("UI", "EnableEnemyHealthbarNumberDisplay", false, "Enables a numerical display for enemy creatures health");
+            EnableEnemyHealthbarNumberDisplay = BindClientConfig("UI", "EnableEnemyHealthbarNumberDisplay", false, "Enables a numerical display for enemy creatures health");
             EnableEnemyHealthbarNumberDisplay.SettingChanged += UIHudControl.OnEnemyHudConfigChanged;
-            StackMultipleBossHealthbars = BindServerConfig("UI", "StackMultipleBossHealthbars", true, "When more than one boss healthbar is shown, stack them vertically (one full bar per row). When disabled, the boss bars are squished horizontally so they sit side-by-side.");
-            BossHealthbarSpacing = BindServerConfig("UI", "BossHealthbarSpacing", 30f, "Gap, in pixels, between boss healthbars (vertical gap when stacked, horizontal gap when squished).", true, 0f, 120f);
-            BossHudTopBuffer = Config.Bind("UI", "BossHudTopBuffer", 120,
-                new ConfigDescription("[Client side Config] Space, in 1080p-equivalent pixels, between the top of the screen and the boss health HUD.",
-                new AcceptableValueRange<int>(0, 600)));
-            BossHealthbarWidthPercent = Config.Bind("UI", "BossHealthbarWidthPercent", 0.4f,
-                new ConfigDescription("[Client side Config] Boss health bar width as a fraction of the screen width.",
-                new AcceptableValueRange<float>(0.1f, 1f)));
+            StackMultipleBossHealthbars = BindClientConfig("UI", "StackMultipleBossHealthbars", true, "When more than one boss healthbar is shown, stack them vertically (one full bar per row). When disabled, the boss bars are squished horizontally so they sit side-by-side.");
+            BossHealthbarSpacing = BindClientConfig("UI", "BossHealthbarSpacing", 30f, "Gap, in pixels, between boss healthbars (vertical gap when stacked, horizontal gap when squished).", true, 0f, 120f);
+            BossHudTopBuffer = BindClientConfig("UI", "BossHudTopBuffer", 120, "Space, in 1080p-equivalent pixels, between the top of the screen and the boss health HUD.", false, 0, 600);
+            BossHealthbarWidthPercent = BindClientConfig("UI", "BossHealthbarWidthPercent", 0.4f, "Boss health bar width as a fraction of the screen width.", false, 0.1f, 1f);
             StackMultipleBossHealthbars.SettingChanged += UIHudControl.OnBossHudConfigChanged;
             BossHealthbarSpacing.SettingChanged += UIHudControl.OnBossHudConfigChanged;
             BossHudTopBuffer.SettingChanged += UIHudControl.OnBossHudConfigChanged;
@@ -571,14 +571,14 @@ namespace StarLevelSystem.common {
             EnableJewelCraftingBossHudCompat = BindServerConfig("UI", "EnableJewelcraftingBossHudCompat", true, "When Jewelcrafting is installed, suppress its multi-boss HUD layout (which rescales the boss health bar every frame) so SLS controls the boss healthbars. Has no effect if Jewelcrafting is not installed.", advanced: true);
 
 
-            NumberOfCacheUpdatesPerFrame = BindServerConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
-            OutputColorizationGeneratorsData = BindServerConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
-            InitialDelayBeforeSetup = BindServerConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.", true, 0f, 30f);
-            FallbackDelayBeforeCreatureSetup = BindServerConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.", true, 1, 60);
-            ConfigPollIntervalSeconds = BindServerConfig("Misc", "ConfigPollIntervalSeconds", 30f, "The number of seconds between checks for changes in the yaml config files.", true, 1f, 300f);
+            NumberOfCacheUpdatesPerFrame = BindClientConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
+            OutputColorizationGeneratorsData = BindClientConfig("Misc", "OutputColorizationGeneratorsData", false, "Writes out color generators to a debug file. This can be useful if you want to hand pick color settings from generated values.");
+            InitialDelayBeforeSetup = BindClientConfig("Misc", "InitialDelayBeforeSetup", 0.5f, "The delay waited before a creature is setup, this is the delay that the person controlling the creature will wait before setup. Higher values will delay setup.", true, 0f, 30f);
+            FallbackDelayBeforeCreatureSetup = BindClientConfig("Misc", "FallbackDelayBeforeCreatureSetup", 5, "The number of seconds non-owned creatures we will waited on before loading their modified attributes. This is a fallback setup.", true, 1, 60);
+            ConfigPollIntervalSeconds = BindClientConfig("Misc", "ConfigPollIntervalSeconds", 30f, "The number of seconds between checks for changes in the yaml config files.", true, 1f, 300f);
             // Read by ConfigChangeDebouncer. Most editors save by truncating and then writing, which the
             // watcher sees as two separate changes; this collapses them into one reload.
-            ConfigApplyDelay = BindServerConfig("Misc", "ConfigApplyDelay", 1f, "Delay in seconds before a changed yaml config file is applied. Coalesces a burst of rapid edits into a single apply. Set to 0 to apply instantly.", true, 0f, 10f);
+            ConfigApplyDelay = BindClientConfig("Misc", "ConfigApplyDelay", 1f, "Delay in seconds before a changed yaml config file is applied. Coalesces a burst of rapid edits into a single apply. Set to 0 to apply instantly.", true, 0f, 10f);
 
 
             OnlyControlVanillaAreaSpawners = BindServerConfig("ModCompat", "OnlyControlVanillaAreaSpawners", true, "When enabled, will only control the spawned level from an AreaSpawner if it is a vanilla one.");
@@ -602,12 +602,68 @@ namespace StarLevelSystem.common {
         private static void OnMainConfigFileChanged(string _) {
             // Apply in the main menu too (ZNet not up yet): the watcher deliberately keeps polling
             // there, but requiring a live server connection meant menu-time hand-edits were never
-            // picked up. A connected pure client still defers to the server-synced values.
-            if (ZNet.instance != null && ZNet.instance.IsServer() == false) {
+            // picked up.
+            bool connectedClient = ZNet.instance != null && ZNet.instance.IsServer() == false;
+            Logger.LogInfo("Configuration file has been changed, reloading settings.");
+
+            // The watcher now reports a deletion as a change. There is nothing to read back in that case;
+            // write the values held in memory out again so the admin gets a file with every key in it.
+            if (File.Exists(cfg.ConfigFilePath) == false) {
+                cfg.Save();
+                RefreshOwnConfigStamp();
                 return;
             }
-            Logger.LogInfo("Configuration file has been changed, reloading settings.");
+
+            if (connectedClient == false) {
+                cfg.Reload();
+                return;
+            }
+
+            // A connected client used to skip the reload entirely, because the early exit asked "am I the
+            // server?" rather than "is this setting synchronised?". It owns roughly a dozen client-side
+            // settings - BossHudTopBuffer, BossHealthbarWidthPercent, the debug switches - and editing any
+            // of them mid-session did nothing until it disconnected.
+            //
+            // The reload has to happen for those, so the synchronised values are put back afterwards:
+            // reading the file would otherwise replace what the server sent with whatever this machine
+            // happens to have on disk. Reload keeps the same ConfigEntry objects, so they can be captured
+            // directly. Only entries whose value actually moved are written back, so a restore raises no
+            // SettingChanged of its own.
+            List<KeyValuePair<ConfigEntryBase, object>> synchronized = SnapshotSynchronizedValues();
             cfg.Reload();
+            int restored = 0;
+            foreach (KeyValuePair<ConfigEntryBase, object> kvp in synchronized) {
+                if (Equals(kvp.Key.BoxedValue, kvp.Value)) { continue; }
+                kvp.Key.BoxedValue = kvp.Value;
+                restored++;
+            }
+            if (restored > 0) {
+                Logger.LogDebug($"Reapplied {restored} server-synchronised setting(s) after the reload.");
+                // SaveOnConfigSet means those writes rewrote the file; re-seed the stamp so the watcher
+                // does not read its own work back as another change.
+                RefreshOwnConfigStamp();
+            }
+        }
+
+        // Every entry this mod marked IsAdminOnly, which is exactly the set Jotunn synchronises from the
+        // server. Read off the entries themselves rather than a parallel list, so a setting cannot be
+        // bound as server-side and then forgotten here.
+        private static List<KeyValuePair<ConfigEntryBase, object>> SnapshotSynchronizedValues() {
+            List<KeyValuePair<ConfigEntryBase, object>> values = new List<KeyValuePair<ConfigEntryBase, object>>();
+            foreach (ConfigDefinition definition in cfg.Keys) {
+                ConfigEntryBase entry = cfg[definition];
+                if (IsServerSide(entry) == false) { continue; }
+                values.Add(new KeyValuePair<ConfigEntryBase, object>(entry, entry.BoxedValue));
+            }
+            return values;
+        }
+
+        private static bool IsServerSide(ConfigEntryBase entry) {
+            if (entry == null || entry.Description == null || entry.Description.Tags == null) { return false; }
+            foreach (object tag in entry.Description.Tags) {
+                if (tag is ConfigurationManagerAttributes attributes && attributes.IsAdminOnly == true) { return true; }
+            }
+            return false;
         }
 
         private static ZPackage SendRequestForPrivateKeys() {
@@ -851,8 +907,8 @@ namespace StarLevelSystem.common {
             // coroutine rather than being ignored.
             if (DataObjects.TryDeserialize(yaml, "raid start request", out NetworkRaidRequest raidNetRequest) == false) { yield break; }
             Vector3 raidPosition = Player.m_localPlayer != null ? Player.m_localPlayer.transform.position : Vector3.zero;
-            if (raidNetRequest.RaidPostion != Vector3.zero) {
-                raidPosition = raidNetRequest.RaidPostion;
+            if (raidNetRequest.RaidPosition != Vector3.zero) {
+                raidPosition = raidNetRequest.RaidPosition;
             }
 
             RaidControl.StartRaidRunner(raidNetRequest.Raid, raidPosition);
@@ -950,6 +1006,68 @@ namespace StarLevelSystem.common {
         /// <param name="acceptableValues"></param>>
         /// <param name="advanced"></param>
         /// <returns></returns>
+        // Bind a setting whose key used to be spelled differently, carrying the old value across.
+        //
+        // Two keys shipped misspelled - OverlevedCreaturesGetRerolledOnLoad and RandomizeTameLevels - and
+        // they are already sitting in every user's .cfg, so simply correcting the string would have reset
+        // both to their defaults on the next launch, silently. Binding the old key first is what reads the
+        // value the admin actually set; the old entry is then removed so the file ends up with one key
+        // rather than two that disagree.
+        //
+        // The old value only wins when it differs from the default, so a file that somehow carries both
+        // keys keeps whatever was deliberately set rather than letting the dead one win.
+        private static T MigratedValue<T>(string category, string oldKey, string newKey, T defaultValue) {
+            ConfigDefinition oldDefinition = new ConfigDefinition(category, oldKey);
+            ConfigEntry<T> legacy = cfg.Bind(oldDefinition, defaultValue,
+                new ConfigDescription($"Deprecated. Renamed to {newKey}; this entry is removed automatically."));
+            T carried = legacy.Value;
+            ((IDictionary<ConfigDefinition, ConfigEntryBase>)cfg).Remove(oldDefinition);
+            if (Equals(carried, defaultValue) == false) {
+                Logger.LogInfo($"Config key {category}.{oldKey} was renamed to {newKey}; carried its value across.");
+            }
+            return carried;
+        }
+
+        // The client-side counterparts. Same shape as BindServerConfig, minus IsAdminOnly - which is the
+        // one flag that decides whether Jotunn overwrites this machine's value with the server's.
+        //
+        // These exist because everything was bound as server-side, including the things that are not the
+        // server's business: minimap colours, healthbar scale, the per-frame budgets a particular machine
+        // can afford, and a debug switch that made every client write a file because one admin ticked it.
+        // A player could not change the colour of their own map rings. The "[Client side Config]" prefix
+        // is on the descriptions rather than the name so it shows up in a config manager.
+        public static ConfigEntry<bool> BindClientConfig(string category, string key, bool value, string description, bool advanced = false) {
+            return cfg.Bind(category, key, value,
+                new ConfigDescription($"[Client side Config] {description}",
+                    null,
+                new ConfigurationManagerAttributes { IsAdvanced = advanced })
+                );
+        }
+
+        public static ConfigEntry<int> BindClientConfig(string category, string key, int value, string description, bool advanced = false, int valMin = 0, int valMax = 150) {
+            return cfg.Bind(category, key, value,
+                new ConfigDescription($"[Client side Config] {description}",
+                new AcceptableValueRange<int>(valMin, valMax),
+                new ConfigurationManagerAttributes { IsAdvanced = advanced })
+                );
+        }
+
+        public static ConfigEntry<float> BindClientConfig(string category, string key, float value, string description, bool advanced = false, float valMin = 0, float valMax = 150) {
+            return cfg.Bind(category, key, value,
+                new ConfigDescription($"[Client side Config] {description}",
+                new AcceptableValueRange<float>(valMin, valMax),
+                new ConfigurationManagerAttributes { IsAdvanced = advanced })
+                );
+        }
+
+        public static ConfigEntry<string> BindClientConfig(string category, string key, string value, string description, AcceptableValueList<string> acceptableValues = null, bool advanced = false) {
+            return cfg.Bind(category, key, value,
+                new ConfigDescription($"[Client side Config] {description}",
+                    acceptableValues,
+                new ConfigurationManagerAttributes { IsAdvanced = advanced })
+                );
+        }
+
         public static ConfigEntry<bool> BindServerConfig(string category, string key, bool value, string description, AcceptableValueBase acceptableValues = null, bool advanced = false) {
             return cfg.Bind(category, key, value,
                 new ConfigDescription(description,

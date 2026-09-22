@@ -123,7 +123,7 @@ namespace StarLevelSystem.modules.Raids
 
         internal static ZPackage CreateStartRaidPackage(RaidDefinition targetRaid, Vector3 pos) {
             ZPackage zpack = new ZPackage();
-            zpack.Write(DataObjects.yamlSerializer.Serialize(new NetworkRaidRequest() { Raid = targetRaid, RaidPostion = pos}));
+            zpack.Write(DataObjects.yamlSerializer.Serialize(new NetworkRaidRequest() { Raid = targetRaid, RaidPosition = pos}));
             return zpack;
         }
 

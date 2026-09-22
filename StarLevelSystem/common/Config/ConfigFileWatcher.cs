@@ -26,6 +26,12 @@ namespace StarLevelSystem.common {
             internal DateTime LastWriteUTC;
             internal long FileLength;
             internal Action<string> Callback;
+            // Deleting a watched file used to be invisible: the poll skipped anything that no longer
+            // existed, so an admin who deleted a config to regenerate it saw nothing happen until the
+            // next restart. The transition is what matters, so it is reported once rather than on every
+            // pass, and the callback - which for a yaml config rewrites the defaults - is what puts the
+            // file back.
+            internal bool Existed;
         }
 
         private static readonly Dictionary<string, WatchEntry> WatchedFiles =
@@ -55,7 +61,7 @@ namespace StarLevelSystem.common {
                 size = info.Length;
             }
 
-            WatchedFiles[fullPath] = new WatchEntry() { LastWriteUTC = mtime, FileLength = size, Callback = onChanged };
+            WatchedFiles[fullPath] = new WatchEntry() { LastWriteUTC = mtime, FileLength = size, Callback = onChanged, Existed = File.Exists(fullPath) };
             Logger.LogDebug($"ConfigFileWatcher watching {fullPath}");
         }
 
@@ -103,7 +109,17 @@ namespace StarLevelSystem.common {
 
                 foreach (string path in paths) {
                     if (WatchedFiles.TryGetValue(path, out WatchEntry entry) == false) { continue; }
-                    if (File.Exists(path) == false) { continue; }
+                    if (File.Exists(path) == false) {
+                        if (entry.Existed) {
+                            entry.Existed = false;
+                            entry.LastWriteUTC = DateTime.MinValue;
+                            entry.FileLength = 0;
+                            Logger.LogWarning($"{Path.GetFileName(path)} was deleted; restoring it.");
+                            Notify(entry, path);
+                        }
+                        continue;
+                    }
+                    entry.Existed = true;
 
                     FileInfo info = new FileInfo(path);
                     DateTime mtime = info.LastWriteTimeUtc;
@@ -115,11 +131,15 @@ namespace StarLevelSystem.common {
                     entry.LastWriteUTC = mtime;
                     entry.FileLength = size;
 
-                    try {
-                        entry.Callback?.Invoke(path);
-                    } catch (Exception e) {
-                        Logger.LogWarning($"ConfigFileWatcher callback for {path} threw: {e.Message}");
-                    }
+                    Notify(entry, path);
+                }
+            }
+
+            private static void Notify(WatchEntry entry, string path) {
+                try {
+                    entry.Callback?.Invoke(path);
+                } catch (Exception e) {
+                    Logger.LogWarning($"ConfigFileWatcher callback for {path} threw: {e.Message}");
                 }
             }
         }
