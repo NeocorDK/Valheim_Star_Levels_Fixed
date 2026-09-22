@@ -78,6 +78,7 @@ namespace StarLevelSystem.modules.UI {
         private static Text titleText;
         private static Text generatorPreviewText;
         private static Text tableWarnText;
+        private static Text curveRangeText;
         private static GameObject curveGraphRoot;
         private const float GraphH = 300f;
         private static GameObject tableEditorRoot;
@@ -209,6 +210,7 @@ namespace StarLevelSystem.modules.UI {
             messageText = null;
             generatorPreviewText = null;
             tableWarnText = null;
+            curveRangeText = null;
             curveGraphRoot = null;
             tableEditorRoot = null;
             tableEditorRows = null;
@@ -336,7 +338,15 @@ namespace StarLevelSystem.modules.UI {
                 ConfigUI.AddHeaderRow(parent, LeftColWidth, "$sls_cfg_per_level_stats"),
                 ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_creature_hp_per_level", 0f, 5f, staged.creatureHpPerLevel, false, v => { staged.creatureHpPerLevel = v; UpdateExampleMath(); }),
                 ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_creature_dmg_per_level", 0f, 2f, staged.creatureDmgPerLevel, false, v => { staged.creatureDmgPerLevel = v; UpdateExampleMath(); }),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_max_level_stars", 1f, 200f, staged.maxLevel, true, v => { staged.maxLevel = (int)v; UpdateExampleMath(); }),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_max_level_stars", 1f, 200f, staged.maxLevel, true, v => {
+                    staged.maxLevel = (int)v;
+                    UpdateExampleMath();
+                    // The generator's range follows this slider, so the generator page has to be brought
+                    // along: its table has one row per star and the graph one bar per star.
+                    SyncGeneratorRange();
+                    if (staged.generator != null && staged.generator.LevelupCalculationStyle == LevelupCalculationStyle.Table) { RebuildTableEditor(); }
+                    UpdateGeneratorPreview();
+                }),
                 ConfigUI.AddDividerRow(parent, PanelW - 2 * Margin, DividerH),   // spans both columns, between creature and boss sections
                 ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_boss_hp_per_level", 0f, 5f, staged.bossHpPerLevel, false, v => { staged.bossHpPerLevel = v; UpdateExampleMath(); }),
                 ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_boss_dmg_per_level", 0f, 5f, staged.bossDmgPerLevel, false, v => { staged.bossDmgPerLevel = v; UpdateExampleMath(); }),
@@ -407,6 +417,7 @@ namespace StarLevelSystem.modules.UI {
 
             void Relayout() {
                 bool on = staged.useGenerator;
+                SyncGeneratorRange();
                 bool showTable = on && staged.generator.LevelupCalculationStyle == LevelupCalculationStyle.Table;
 
                 // Before the visibility pass, not after: the editor seeds a shape for this span when there
@@ -444,35 +455,20 @@ namespace StarLevelSystem.modules.UI {
             // LevelSettings.yaml and are not the global star cap, which is the MaxLevel slider on the
             // left. The old labels read as a guaranteed minimum, which this is not - the real floor is
             // BiomeMinLevelOverride / CreatureMinLevelOverride.
-            GameObject curveStartRow = null, curveEndRow = null;
-
-            // Pushing the corrected value back into the other slider matters: nothing else updates a
-            // slider's displayed number, so a silent correction would leave the panel showing a range it
-            // is not going to save. The re-entrant call settles immediately because the second pass finds
-            // the two already in order.
-            void SyncSlider(GameObject row, float value) {
-                Slider s = row == null ? null : row.GetComponentInChildren<Slider>();
-                if (s != null && Mathf.Approximately(s.value, value) == false) { s.value = value; }
-            }
-
-            curveStartRow = ConfigUI.AddSliderRow(parent, ColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_curve_start_level", 1f, 50f, staged.generator.MinLevel, true, v => {
-                staged.generator.MinLevel = (int)v;
-                if (staged.generator.MaxLevel < staged.generator.MinLevel) {
-                    staged.generator.MaxLevel = staged.generator.MinLevel;
-                    SyncSlider(curveEndRow, staged.generator.MaxLevel);
-                }
-                Relayout();
-            });
-            AddBodyRow(curveStartRow);
-            curveEndRow = ConfigUI.AddSliderRow(parent, ColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_curve_end_level", 1f, 200f, staged.generator.MaxLevel, true, v => {
-                staged.generator.MaxLevel = (int)v;
-                if (staged.generator.MinLevel > staged.generator.MaxLevel) {
-                    staged.generator.MinLevel = staged.generator.MaxLevel;
-                    SyncSlider(curveStartRow, staged.generator.MinLevel);
-                }
-                Relayout();
-            });
-            AddBodyRow(curveEndRow);
+            // The range is derived, not set here.
+            //
+            // It has to start at zero stars: that is the ordinary, unstarred creature, and a chance table
+            // that does not list it cannot say how many creatures stay unstarred. It ends at the star cap
+            // from the Stats page, because a curve running past the cap describes levels the roller will
+            // never hand out, and one stopping short leaves the levels between it and the cap unreachable.
+            //
+            // Two independent sliders here also meant the panel used two different units under similar
+            // names: "Max level (stars)" on the Stats page is a STAR count, while the generator's own
+            // Min/Max are internal levels, which are stars + 1. Setting the end to 4 therefore produced a
+            // table covering 0..3 stars, which is exactly the off-by-one this replaces.
+            GameObject rangeRow = ConfigUI.AddTextRow(parent, ColWidth, RowHeight, "", 14, GUIManager.Instance.ValheimBeige);
+            curveRangeText = rangeRow.GetComponentInChildren<Text>();
+            AddBodyRow(rangeRow);
             AddBodyRow(ConfigUI.AddSliderRow(parent, ColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_level_up_chance", 0f, 1f, staged.generator.LevelUpChance, false, v => {
                 staged.generator.LevelUpChance = v;
                 UpdateGeneratorPreview();
@@ -761,16 +757,28 @@ namespace StarLevelSystem.modules.UI {
                 // threshold[k] is 100 * P(level > k), because the roller walks levels upward and takes the
                 // first whose threshold the roll clears.
                 float stayAtMin = 100f - Mathf.Clamp(curve[min], 0f, 100f);
-                string line = $"{ConfigUI.L("$sls_cfg_preview_rolls")}: {ConfigUI.L("$sls_cfg_preview_level")} {min} = {stayAtMin:0.0}%";
+                string stars = ConfigUI.L("$sls_cfg_unit_stars");
+                string line = $"{ConfigUI.L("$sls_cfg_preview_rolls")}: {min - 1} {stars} = {stayAtMin:0.0}%";
                 int mid = min + (max - min) / 2;
-                if (mid > min) { line += $"   >= {mid} = {CurveChance(curve, mid)}"; }
-                if (max > min) { line += $"   {max} ({ConfigUI.L("$sls_cfg_preview_top")}) = {CurveChance(curve, max)}"; }
+                if (mid > min) { line += $"   >= {mid - 1} = {CurveChance(curve, mid)}"; }
+                if (max > min) { line += $"   {max - 1} ({ConfigUI.L("$sls_cfg_preview_top")}) = {CurveChance(curve, max)}"; }
                 generatorPreviewText.text = line;
                 RebuildCurveGraph(curve, min, max);
             } catch (Exception e) {
                 generatorPreviewText.text = "";
                 ClearCurveGraph();
                 Logger.LogDebug($"Could not preview the level generator curve: {e.Message}");
+            }
+        }
+
+        // The generator covers 0 stars up to the configured star cap, in internal levels (stars + 1).
+        private static void SyncGeneratorRange() {
+            if (staged?.generator == null) { return; }
+            int maxStars = Mathf.Max(0, staged.maxLevel);
+            staged.generator.MinLevel = 1;
+            staged.generator.MaxLevel = maxStars + 1;
+            if (curveRangeText != null) {
+                curveRangeText.text = $"{ConfigUI.L("$sls_cfg_curve_range")}: 0 - {maxStars} {ConfigUI.L("$sls_cfg_unit_stars")}";
             }
         }
 
@@ -796,40 +804,83 @@ namespace StarLevelSystem.modules.UI {
                 UnityEngine.Object.Destroy(child.gameObject);
             }
 
-            SortedDictionary<int, float> shape = EnsureTableShape(span, min, max);
+            float[] shares = EnsureTableShares(span, min, max);
 
             ConfigUI.CreateScroll(tableEditorRoot.transform, 0f, 0f, TableEditorW, TableEditorH,
                 out Transform content, out float contentW);
             if (content == null) { return; }
 
-            int position = 0;
-            foreach (int key in new List<int>(shape.Keys)) {
-                int levelKey = key;                      // capture for the closure
-                int shownLevel = min + position;
-                position++;
+            for (int i = 0; i < span; i++) {
+                int index = i;                       // capture for the closure
+                int stars = i;                       // level min+i is min+i-1 stars, and min is 1
                 GameObject row = ConfigUI.NewLayoutRow(content, contentW, 28f);
-                ConfigUI.AddText(row.transform, 4f, 4f, 150f, 22f,
-                    $"{ConfigUI.L("$sls_cfg_preview_level")} {shownLevel}", 13, TextAnchor.MiddleLeft,
+                string label = stars == 1
+                    ? $"1 {ConfigUI.L("$sls_cfg_unit_star_one")}"
+                    : $"{stars} {ConfigUI.L("$sls_cfg_unit_stars")}";
+                ConfigUI.AddText(row.transform, 4f, 4f, 150f, 22f, label, 13, TextAnchor.MiddleLeft,
                     GUIManager.Instance.ValheimBeige);
-                ConfigUI.AddNumberField(row.transform, 160f, 1f, 90f, shape[levelKey], false, v => {
-                    shape[levelKey] = v;
+                ConfigUI.AddNumberField(row.transform, 160f, 1f, 90f, shares[index], false, v => {
+                    shares[index] = Mathf.Max(0f, v);
+                    WriteTableShares(span, min, max, shares);
                     UpdateGeneratorPreview();
                 });
             }
         }
 
-        private static int tableEditorSpan = -1;
+        // The editor works in SHARES - "what percentage of creatures come out with this many stars" -
+        // because that is the question being answered and it is what the graph above draws.
+        //
+        // LevelupWeightTablesBySpan stores thresholds, which is the roll a creature must clear to go
+        // higher, and the two are not the same thing: a share of zero for unstarred creatures is a
+        // threshold of 100, not of 0. Typing 0 to mean "none of these" and getting "all of these" is the
+        // sort of inversion nobody catches. The stored format is left alone - the shipped 4/5/6-level
+        // shapes are thresholds and reinterpreting them would silently rewrite existing configs - so the
+        // conversion happens here, on the way in and out.
+        private static float[] SharesFromThresholds(SortedDictionary<int, float> shape, int span) {
+            float[] shares = new float[span];
+            List<float> thresholds = new List<float>();
+            foreach (KeyValuePair<int, float> kvp in shape) { thresholds.Add(Mathf.Clamp(kvp.Value, 0f, 100f)); }
+            while (thresholds.Count < span) { thresholds.Add(0f); }
 
-        // The shape for this span, creating one from the curve that would otherwise be used so a new table
+            for (int i = 0; i < span; i++) {
+                float above = thresholds[i];
+                float atOrAbove = i == 0 ? 100f : thresholds[i - 1];
+                shares[i] = Mathf.Max(0f, atOrAbove - above);
+            }
+            return shares;
+        }
+
+        private static void WriteTableShares(int span, int min, int max, float[] shares) {
+            float total = 0f;
+            for (int i = 0; i < shares.Length; i++) { total += Mathf.Max(0f, shares[i]); }
+
+            SortedDictionary<int, float> shape = new SortedDictionary<int, float>();
+            // Normalised, so the numbers can be typed as any weights at all - 1/2/3 works as well as
+            // 50/30/20 - and a column that no longer sums to 100 still produces a valid curve.
+            double remaining = 100.0;
+            for (int i = 0; i < span; i++) {
+                double share = total > 0f ? 100.0 * Mathf.Max(0f, shares[i]) / total : 100.0 / span;
+                remaining -= share;
+                int lvl = min + i;
+                // The threshold recorded against a level is the chance of going ABOVE it, so it is what is
+                // left after this level's own share. The top level keeps the epsilon the roller needs to
+                // be able to reach it at all.
+                float threshold = (float)System.Math.Max(0.01, System.Math.Round(remaining, 2));
+                shape[lvl] = lvl == max ? 0.01f : threshold;
+            }
+            staged.tables ??= new Dictionary<int, SortedDictionary<int, float>>();
+            staged.tables[span] = shape;
+        }
+
+        // The shares for this span, seeded from the curve that would otherwise be used so a new table
         // opens on a sensible starting point instead of a column of zeroes.
-        private static SortedDictionary<int, float> EnsureTableShape(int span, int min, int max) {
+        private static float[] EnsureTableShares(int span, int min, int max) {
             staged.tables ??= new Dictionary<int, SortedDictionary<int, float>>();
             if (staged.tables.TryGetValue(span, out SortedDictionary<int, float> shape)
                 && shape != null && shape.Count >= span) {
-                return shape;
+                return SharesFromThresholds(shape, span);
             }
 
-            shape = new SortedDictionary<int, float>();
             LevelGenerator seed = new LevelGenerator() {
                 MinLevel = min,
                 MaxLevel = max,
@@ -837,12 +888,13 @@ namespace StarLevelSystem.modules.UI {
                 LevelupCalculationStyle = LevelupCalculationStyle.Exponential,
                 NightMultiplier = staged.generator.NightMultiplier,
             };
-            foreach (KeyValuePair<int, float> kvp in seed.GetLevelUpDefinition(quiet: true)) {
-                shape[kvp.Key] = Mathf.Round(kvp.Value * 100f) / 100f;
-            }
-            staged.tables[span] = shape;
-            return shape;
+            float[] shares = SharesFromThresholds(seed.GetLevelUpDefinition(quiet: true), span);
+            for (int i = 0; i < shares.Length; i++) { shares[i] = Mathf.Round(shares[i] * 100f) / 100f; }
+            WriteTableShares(span, min, max, shares);
+            return shares;
         }
+
+        private static int tableEditorSpan = -1;
 
         // One bar per level, height proportional to the share of creatures that come out AT that level.
         //
@@ -912,10 +964,13 @@ namespace StarLevelSystem.modules.UI {
             axisImg.color = new Color(0.6f, 0.5f, 0.35f, 0.6f);
             axisImg.raycastTarget = false;
 
-            ConfigUI.AddText(curveGraphRoot.transform, 0f, plotH + 1f, 60f, LabelBand, min.ToString(), 11,
+            // Stars, not internal levels: the axis reads next to sliders that talk in stars, and an axis
+            // starting at "1" is what made the unstarred creatures look like a missing case rather than
+            // the first bar.
+            ConfigUI.AddText(curveGraphRoot.transform, 0f, plotH + 1f, 60f, LabelBand, (min - 1).ToString(), 11,
                 TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
             if (max > min) {
-                ConfigUI.AddText(curveGraphRoot.transform, width - 60f, plotH + 1f, 60f, LabelBand, max.ToString(), 11,
+                ConfigUI.AddText(curveGraphRoot.transform, width - 60f, plotH + 1f, 60f, LabelBand, (max - 1).ToString(), 11,
                     TextAnchor.UpperRight, GUIManager.Instance.ValheimBeige);
             }
             ConfigUI.AddText(curveGraphRoot.transform, 0f, 0f, width, LabelBand, $"{ConfigUI.L("$sls_cfg_curve_peak")} {peak:0.0}%", 11,

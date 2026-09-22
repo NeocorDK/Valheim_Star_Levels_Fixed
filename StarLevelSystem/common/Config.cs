@@ -382,9 +382,9 @@ namespace StarLevelSystem.common {
             ShowQuickConfigureButton.SettingChanged += QuickConfigureTool.OnShowButtonChanged;
 
 
-            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The highest LEVEL a creature can reach. Level 1 has no stars, so 20 means up to 19 stars.", false, 1, 200);
+            MaxLevel = BindServerConfig("LevelSystem", "MaxLevel", 20, "The highest number of STARS a creature can reach: 20 means creatures up to 20 stars. Stored internally as a level, which is stars + 1, because an unstarred creature is level 1.", false, 1, 200);
             MaxLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;
-            MaxBossLevel = BindServerConfig("LevelSystem", "MaxBossLevel", 10, "The highest LEVEL a boss can reach (level 1 has no stars). A biome's BiomeMaxLevelOverride takes precedence over this, so with the shipped biome caps a boss is limited by its biome rather than by this value.", false, 1, 200);
+            MaxBossLevel = BindServerConfig("LevelSystem", "MaxBossLevel", 10, "The highest number of STARS a boss can reach. A biome's BiomeMaxLevelOverride takes precedence over this, so with the shipped biome caps a boss is limited by its biome rather than by this value.", false, 1, 200);
             MaxBossLevel.SettingChanged += UpdateLevelsOnChange.ModifyLoadedCreatureLevels;
             OverLevelCreaturesGetRerolledOnLoad = BindServerConfig("LevelSystem", "OverLevelCreaturesGetRerolledOnLoad",
                 MigratedValue("LevelSystem", "OverlevedCreaturesGetRerolledOnLoad", "OverLevelCreaturesGetRerolledOnLoad", true),
