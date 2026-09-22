@@ -183,12 +183,38 @@ namespace StarLevelSystem.common {
                 width: w, height: h, draggable: true);
 
             panel.AddComponent<ConfigUIInputGuard>().Hold();
+            FitToScreen(panel, w, h);
 
             heading = AddText(panel.transform, 0f, 16f, w, RowHeight, title, 22, TextAnchor.MiddleCenter,
                 GUIManager.Instance.ValheimYellow);
 
             body = panel.transform;
             return panel;
+        }
+
+        // Shrink a panel that does not fit, rather than letting its edges run off the screen.
+        //
+        // A panel is authored at a fixed size, and the GUI canvas gets smaller in canvas units as the
+        // player's GuiScale goes up - so a 900x690 editor fits comfortably at 1080p and GuiScale 1, and
+        // hangs off both edges at 1366x768 and GuiScale 1.5, with the nav buttons along the bottom edge
+        // among the parts that go. The parent rect is already expressed in the same units the panel is,
+        // so one uniform scale covers every resolution and GuiScale combination without the panel having
+        // to know about either.
+        private static void FitToScreen(GameObject panel, float w, float h) {
+            RectTransform canvasRT = GUIManager.CustomGUIFront != null
+                ? GUIManager.CustomGUIFront.transform as RectTransform
+                : null;
+            if (canvasRT == null || w <= 0f || h <= 0f) { return; }
+
+            // A small inset so a just-barely-fitting panel is not flush against the screen edge.
+            float availableW = canvasRT.rect.width - 24f;
+            float availableH = canvasRT.rect.height - 24f;
+            if (availableW <= 0f || availableH <= 0f) { return; }
+
+            float fit = Mathf.Min(1f, Mathf.Min(availableW / w, availableH / h));
+            if (fit >= 1f) { return; }
+            panel.transform.localScale = new Vector3(fit, fit, 1f);
+            Logger.LogDebug($"Config panel scaled to {fit:0.00} to fit a {canvasRT.rect.width:0}x{canvasRT.rect.height:0} GUI canvas.");
         }
 
         // Jotunn's scroll view hides its content behind a fixed child path, and the usable width is the

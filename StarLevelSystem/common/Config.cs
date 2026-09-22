@@ -500,7 +500,12 @@ namespace StarLevelSystem.common {
             MaxActiveRaids = BindServerConfig("Raids", "MaxActiveRaids", 10, "The maximum number of concurrent raids, automatically limited to 1 per player.", false, 1, 100);
             RaidWindDownSeconds = BindServerConfig("Raids", "RaidWindDownSeconds", 60, "Seconds after a raid ends during which its creatures move away and despawn naturally. 0 = no linger.", true, 0, 600);
             RaidForceDeleteStragglers = BindServerConfig("Raids", "RaidForceDeleteStragglers", true, "When enabled, any raid creatures still present at the end of RaidWindDownSeconds are force-deleted. When disabled, leftover creatures are left to wander off and despawn on their own.", advanced: true);
-            EnableCustomRaidsCompat = BindServerConfig("Raids", "EnableCustomRaidsCompat", true, "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.", advanced: true);
+            // Lives in ModCompat with the other three. It was in Raids, and EnableJewelcraftingBossHudCompat
+            // was in UI, so the mod's compatibility switches were spread across three sections and an
+            // admin looking for them had to know where each one happened to be declared.
+            EnableCustomRaidsCompat = BindServerConfig("ModCompat", "EnableCustomRaidsCompat",
+                MigratedValue("Raids", "EnableCustomRaidsCompat", "ModCompat", "EnableCustomRaidsCompat", true),
+                "When CustomRaids is installed and SLS raids are enabled, allow CustomRaids raids to fire alongside SLS raids. Has no effect if CustomRaids is not installed.", advanced: true);
 
             EnableNemesisSystem = BindServerConfig("Nemesis", "EnableNemesisSystem", true, "Enables the per-player Nemesis system that biases newly-spawning creature star levels based on a tracked player score.");
             EnableNemesisRemoteSpawning = BindServerConfig("Nemesis", "EnableNemesisRemoteSpawning", false, "Enables ambient, server-driven remote spawning of Nemesis minibosses across the world (a second, finer gate lives in NemesisSettings.yaml under RemoteSpawning.Enabled).");
@@ -569,7 +574,13 @@ namespace StarLevelSystem.common {
             BossHealthbarSpacing.SettingChanged += UIHudControl.OnBossHudConfigChanged;
             BossHudTopBuffer.SettingChanged += UIHudControl.OnBossHudConfigChanged;
             BossHealthbarWidthPercent.SettingChanged += UIHudControl.OnBossHudConfigChanged;
-            EnableJewelCraftingBossHudCompat = BindServerConfig("UI", "EnableJewelcraftingBossHudCompat", true, "When Jewelcrafting is installed, suppress its multi-boss HUD layout (which rescales the boss health bar every frame) so SLS controls the boss healthbars. Has no effect if Jewelcrafting is not installed.", advanced: true);
+            // Moving it also settles the one remaining key/field spelling mismatch: the field has always
+            // been EnableJewelCraftingBossHudCompat and the key was EnableJewelcraftingBossHudCompat. A
+            // case-only rename on its own was not worth migrating anyone's file for; carried along with
+            // the section move it costs nothing.
+            EnableJewelCraftingBossHudCompat = BindServerConfig("ModCompat", "EnableJewelCraftingBossHudCompat",
+                MigratedValue("UI", "EnableJewelcraftingBossHudCompat", "ModCompat", "EnableJewelCraftingBossHudCompat", true),
+                "When Jewelcrafting is installed, suppress its multi-boss HUD layout (which rescales the boss health bar every frame) so SLS controls the boss healthbars. Has no effect if Jewelcrafting is not installed.", advanced: true);
 
 
             NumberOfCacheUpdatesPerFrame = BindClientConfig("Misc", "NumberOfCacheUpdatesPerFrame", 10, "Number of cache updates to process when performing live updates", true, 1, 150);
@@ -1019,13 +1030,18 @@ namespace StarLevelSystem.common {
         // The old value only wins when it differs from the default, so a file that somehow carries both
         // keys keeps whatever was deliberately set rather than letting the dead one win.
         private static T MigratedValue<T>(string category, string oldKey, string newKey, T defaultValue) {
-            ConfigDefinition oldDefinition = new ConfigDefinition(category, oldKey);
+            return MigratedValue(category, oldKey, category, newKey, defaultValue);
+        }
+
+        // The same for a setting that moved section as well as, or instead of, changing its name.
+        private static T MigratedValue<T>(string oldCategory, string oldKey, string newCategory, string newKey, T defaultValue) {
+            ConfigDefinition oldDefinition = new ConfigDefinition(oldCategory, oldKey);
             ConfigEntry<T> legacy = cfg.Bind(oldDefinition, defaultValue,
-                new ConfigDescription($"Deprecated. Renamed to {newKey}; this entry is removed automatically."));
+                new ConfigDescription($"Deprecated. Now {newCategory}.{newKey}; this entry is removed automatically."));
             T carried = legacy.Value;
             ((IDictionary<ConfigDefinition, ConfigEntryBase>)cfg).Remove(oldDefinition);
             if (Equals(carried, defaultValue) == false) {
-                Logger.LogInfo($"Config key {category}.{oldKey} was renamed to {newKey}; carried its value across.");
+                Logger.LogInfo($"Config key {oldCategory}.{oldKey} is now {newCategory}.{newKey}; carried its value across.");
             }
             return carried;
         }

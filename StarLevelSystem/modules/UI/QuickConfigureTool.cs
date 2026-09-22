@@ -38,34 +38,34 @@ namespace StarLevelSystem.modules.UI {
 
         // Brief, player-facing descriptions for each modifier (see Package/README.md), keyed by ModifierNames.
         private static readonly Dictionary<string, string> ModifierDescriptions = new Dictionary<string, string>() {
-            { "BossSummoner", "Summons minion creatures at regular intervals." },
-            { "SoulEater", "Grows stronger as nearby creatures die; self-heals." },
-            { "LifeLink", "Redirects some damage taken to a nearby creature." },
-            { "Splitter", "Spawns replacement creatures when it dies." },
-            { "Lootbags", "Tankier and faster; drops extra loot." },
-            { "Fire", "Adds fire damage to its attacks." },
-            { "Frost", "Adds frost damage to its attacks." },
-            { "Poison", "Adds poison damage to its attacks." },
-            { "Lightning", "Adds lightning damage to its attacks." },
-            { "FireNova", "Explodes in fire on death, damaging nearby targets." },
-            { "FrostNova", "Explodes in frost on death, damaging nearby targets." },
-            { "PoisonNova", "Explodes in poison on death, damaging nearby targets." },
-            { "LightningNova", "Explodes in lightning on death, damaging nearby targets." },
-            { "Evolving", "Gains a level after enough kills." },
-            { "ResistSlash", "Reduces damage taken from slash." },
-            { "ResistBlunt", "Reduces damage taken from blunt." },
-            { "ResistPierce", "Reduces damage taken from pierce (e.g. arrows)." },
-            { "ResistFire", "Reduces damage taken from fire." },
-            { "ResistFrost", "Reduces damage taken from frost." },
-            { "ResistPoison", "Reduces damage taken from poison." },
-            { "ResistSpirit", "Reduces damage taken from spirit." },
-            { "Alert", "Increases the creature's hearing range." },
-            { "Big", "Increases the creature's size." },
-            { "Fast", "Increases the creature's movement speed." },
-            { "StaminaDrain", "Its attacks drain your stamina. Dodging avoids it; blocking or parrying lessens it." },
-            { "EitrDrain", "Its attacks drain your eitr. Dodging avoids it; blocking or parrying lessens it." },
-            { "Brutal", "Increases the creature's attack speed." },
-            { "ElementalChaos", "Adds random elemental damage on each hit." },
+            { "BossSummoner", "$sls_cfg_mod_bosssummoner" },
+            { "SoulEater", "$sls_cfg_mod_souleater" },
+            { "LifeLink", "$sls_cfg_mod_lifelink" },
+            { "Splitter", "$sls_cfg_mod_splitter" },
+            { "Lootbags", "$sls_cfg_mod_lootbags" },
+            { "Fire", "$sls_cfg_mod_fire" },
+            { "Frost", "$sls_cfg_mod_frost" },
+            { "Poison", "$sls_cfg_mod_poison" },
+            { "Lightning", "$sls_cfg_mod_lightning" },
+            { "FireNova", "$sls_cfg_mod_firenova" },
+            { "FrostNova", "$sls_cfg_mod_frostnova" },
+            { "PoisonNova", "$sls_cfg_mod_poisonnova" },
+            { "LightningNova", "$sls_cfg_mod_lightningnova" },
+            { "Evolving", "$sls_cfg_mod_evolving" },
+            { "ResistSlash", "$sls_cfg_mod_resistslash" },
+            { "ResistBlunt", "$sls_cfg_mod_resistblunt" },
+            { "ResistPierce", "$sls_cfg_mod_resistpierce" },
+            { "ResistFire", "$sls_cfg_mod_resistfire" },
+            { "ResistFrost", "$sls_cfg_mod_resistfrost" },
+            { "ResistPoison", "$sls_cfg_mod_resistpoison" },
+            { "ResistSpirit", "$sls_cfg_mod_resistspirit" },
+            { "Alert", "$sls_cfg_mod_alert" },
+            { "Big", "$sls_cfg_mod_big" },
+            { "Fast", "$sls_cfg_mod_fast" },
+            { "StaminaDrain", "$sls_cfg_mod_staminadrain" },
+            { "EitrDrain", "$sls_cfg_mod_eitrdrain" },
+            { "Brutal", "$sls_cfg_mod_brutal" },
+            { "ElementalChaos", "$sls_cfg_mod_elementalchaos" },
         };
 
         private static Sprite DistanceExample;
@@ -213,7 +213,7 @@ namespace StarLevelSystem.modules.UI {
             // Through ConfigUI.CreatePanel, never a raw CreateWoodpanel: that is the only thing that
             // attaches ConfigUIInputGuard. Without it every keystroke typed into this panel's ~25 input
             // fields also reaches the game, so entering a number walks the character around.
-            panel = ConfigUI.CreatePanel("StarLevelSystem - Quick Configure", PanelW, PanelH, out Transform body, out titleText);
+            panel = ConfigUI.CreatePanel("$sls_cfg_starlevelsystem_quick_configure", PanelW, PanelH, out Transform body, out titleText);
             ConfigUI.AddCloseX(body, PanelW, ClosePanel);
 
             // Build out the page skeletons
@@ -239,10 +239,10 @@ namespace StarLevelSystem.modules.UI {
             // no caller, which is why a refused save produced nothing an admin could see.
             messageText = ConfigUI.AddText(panel.transform, Margin + 300f, navY + 4f,
                 PanelW - 2 * Margin - 490f, RowHeight, "", 13, TextAnchor.MiddleCenter, new Color(1f, 0.6f, 0.4f));
-            backBtn = ConfigUI.AddButton(panel.transform, Margin, navY, 130f, "< Back", () => ShowPage(currentPage - 1));
-            cancelBtn = ConfigUI.AddButton(panel.transform, Margin + 150f, navY, 130f, "Cancel", ClosePanel);
-            nextBtn = ConfigUI.AddButton(panel.transform, PanelW - Margin - 170f, navY, 170f, "Next >", () => ShowPage(currentPage + 1));
-            applyBtn = ConfigUI.AddButton(panel.transform, PanelW - Margin - 170f, navY, 170f, "Apply & Save", ApplyAndSave);
+            backBtn = ConfigUI.AddButton(panel.transform, Margin, navY, 130f, "$sls_cfg_back", () => ShowPage(currentPage - 1));
+            cancelBtn = ConfigUI.AddButton(panel.transform, Margin + 150f, navY, 130f, "$sls_cfg_cancel", ClosePanel);
+            nextBtn = ConfigUI.AddButton(panel.transform, PanelW - Margin - 170f, navY, 170f, "$sls_cfg_next", () => ShowPage(currentPage + 1));
+            applyBtn = ConfigUI.AddButton(panel.transform, PanelW - Margin - 170f, navY, 170f, "$sls_cfg_apply_and_save", ApplyAndSave);
         }
 
         // Moves to the current page
@@ -252,8 +252,12 @@ namespace StarLevelSystem.modules.UI {
             for (int i = 0; i < pageRoots.Length; i++) {
                 pageRoots[i].SetActive(i == currentPage);
             }
-            string[] names = { "Scaling Mechanisms", "Stats & Level Generator", "Modifiers", "Raids", "Nemesis System" };
-            titleText.text = $"StarLevelSystem - {names[currentPage]}  (Page {currentPage + 1} of {PageCount})";
+            // Tokens, not literals: every heading on this panel was hardcoded English, so the mod's
+            // thirty-odd language files could not reach any of it. Localize falls back to the token's
+            // English text when a language file does not carry it, so a missing translation reads as
+            // English rather than as a raw token.
+            string[] names = { "$sls_cfg_page_scaling_mechanisms", "$sls_cfg_page_stats_and_level_generator", "$sls_cfg_page_modifiers", "$sls_cfg_page_raids", "$sls_cfg_page_nemesis_system" };
+            titleText.text = $"StarLevelSystem - {ConfigUI.L(names[currentPage])}  ({ConfigUI.L("$sls_cfg_page_word")} {currentPage + 1}/{PageCount})";
 
             backBtn.SetActive(currentPage > 0);
             bool last = currentPage == PageCount - 1;
@@ -275,7 +279,7 @@ namespace StarLevelSystem.modules.UI {
             // Build each row as its own container, collect them in order, then space the column out in one pass.
             List<GameObject> column = new List<GameObject> {
                 ConfigUI.AddHeaderRow(parent, LeftColW, "$sls_cfg_scaling_selection_header", TextAnchor.MiddleCenter),
-                ConfigUI.AddTextRow(parent, ColWidth, 34f, "Here are some high level configurations from the mod, many more things can be customized within the yaml configuration.", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter),
+                ConfigUI.AddTextRow(parent, ColWidth, 34f, "$sls_cfg_here_are_some_high_level_configurations_from_the", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter),
                 AddScalingFeatureRow(parent, ColWidth, ImgW, ImgH,
                     DistanceExample,
                     "$sls_cfg_distance_scale_header",
@@ -317,21 +321,21 @@ namespace StarLevelSystem.modules.UI {
             // Left column - stat multipliers and multiplayer scaling. A full-width divider separates the
             // creature stats (above) from the boss stats (below).
             List<GameObject> left = new List<GameObject> {
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Per-level stats"),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Creature HP / level", 0f, 5f, staged.creatureHpPerLevel, false, v => { staged.creatureHpPerLevel = v; UpdateExampleMath(); }),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Creature dmg / level", 0f, 2f, staged.creatureDmgPerLevel, false, v => { staged.creatureDmgPerLevel = v; UpdateExampleMath(); }),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max level (stars)", 1f, 200f, staged.maxLevel, true, v => { staged.maxLevel = (int)v; UpdateExampleMath(); }),
+                ConfigUI.AddHeaderRow(parent, LeftColWidth, "$sls_cfg_per_level_stats"),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_creature_hp_per_level", 0f, 5f, staged.creatureHpPerLevel, false, v => { staged.creatureHpPerLevel = v; UpdateExampleMath(); }),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_creature_dmg_per_level", 0f, 2f, staged.creatureDmgPerLevel, false, v => { staged.creatureDmgPerLevel = v; UpdateExampleMath(); }),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_max_level_stars", 1f, 200f, staged.maxLevel, true, v => { staged.maxLevel = (int)v; UpdateExampleMath(); }),
                 ConfigUI.AddDividerRow(parent, PanelW - 2 * Margin, DividerH),   // spans both columns, between creature and boss sections
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Boss HP / level", 0f, 5f, staged.bossHpPerLevel, false, v => { staged.bossHpPerLevel = v; UpdateExampleMath(); }),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Boss dmg / level", 0f, 5f, staged.bossDmgPerLevel, false, v => { staged.bossDmgPerLevel = v; UpdateExampleMath(); }),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max boss level", 1f, 200f, staged.maxBossLevel, true, v => { staged.maxBossLevel = (int)v; UpdateExampleMath(); }),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_boss_hp_per_level", 0f, 5f, staged.bossHpPerLevel, false, v => { staged.bossHpPerLevel = v; UpdateExampleMath(); }),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_boss_dmg_per_level", 0f, 5f, staged.bossDmgPerLevel, false, v => { staged.bossDmgPerLevel = v; UpdateExampleMath(); }),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_max_boss_level", 1f, 200f, staged.maxBossLevel, true, v => { staged.maxBossLevel = (int)v; UpdateExampleMath(); }),
                 ConfigUI.AddSpacerRow(parent, LeftColWidth, 4f),
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Multiplayer scaling"),
-                ConfigUI.AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "Enemies gain HP with more players", staged.mpHealth, v => staged.mpHealth = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "HP per extra player", 0f, 0.99f, staged.mpHealthMod, false, v => staged.mpHealthMod = v),
-                ConfigUI.AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "Enemies gain dmg with more players", staged.mpDamage, v => staged.mpDamage = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Dmg per extra player", 0f, 2f, staged.mpDamageMod, false, v => staged.mpDamageMod = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Players needed nearby", 1f, 20f, staged.mpRequiredPlayers, true, v => staged.mpRequiredPlayers = (int)v),
+                ConfigUI.AddHeaderRow(parent, LeftColWidth, "$sls_cfg_multiplayer_scaling"),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "$sls_cfg_enemies_gain_hp_with_more_players", staged.mpHealth, v => staged.mpHealth = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_hp_per_extra_player", 0f, 0.99f, staged.mpHealthMod, false, v => staged.mpHealthMod = v),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, LabelWidth + 170f, "$sls_cfg_enemies_gain_dmg_with_more_players", staged.mpDamage, v => staged.mpDamage = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_dmg_per_extra_player", 0f, 2f, staged.mpDamageMod, false, v => staged.mpDamageMod = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_players_needed_nearby", 1f, 20f, staged.mpRequiredPlayers, true, v => staged.mpRequiredPlayers = (int)v),
             };
             ConfigUI.LayoutColumn(left, 0f, StartY);
 
@@ -339,7 +343,7 @@ namespace StarLevelSystem.modules.UI {
             // example sits beside the Creature HP/dmg sliders, the boss (The Elder) example beside the Boss HP/dmg
             // sliders. The default level generator is laid out below them.
             const float RowPitch = RowHeight + RowGap;
-            GameObject exHeader = ConfigUI.AddHeaderRow(parent, RightColWidth, "Example scaling preview");
+            GameObject exHeader = ConfigUI.AddHeaderRow(parent, RightColWidth, "$sls_cfg_example_scaling_preview");
             ConfigUI.PositionRow(exHeader, RightColumnX, StartY);
 
             GameObject creatureEx = ConfigUI.AddTextRow(parent, RightColWidth, 80f, "", 15, GUIManager.Instance.ValheimBeige);
@@ -358,7 +362,7 @@ namespace StarLevelSystem.modules.UI {
             float genStartY = StartY + 6 * RowPitch + bossShift + 8f;
             GameObject tableWarnRow = null;
             List<GameObject> gaussianRows = new List<GameObject>();
-            List<GameObject> gen = new List<GameObject> { ConfigUI.AddHeaderRow(parent, RightColWidth, "Default level generator") };
+            List<GameObject> gen = new List<GameObject> { ConfigUI.AddHeaderRow(parent, RightColWidth, "$sls_cfg_default_level_generator") };
 
             // Rows that only mean anything once the generator is switched on.
             List<GameObject> genBody = new List<GameObject>();
@@ -381,7 +385,7 @@ namespace StarLevelSystem.modules.UI {
 
             // Opting in is explicit. A generator replaces DefaultCreatureLevelUpChance wholesale on the
             // next load, so it must never appear in the file just because someone opened this panel.
-            gen.Add(ConfigUI.AddToggleRow(parent, RightColWidth, LabelWidth + 80f, "Use level generator",
+            gen.Add(ConfigUI.AddToggleRow(parent, RightColWidth, LabelWidth + 80f, "$sls_cfg_use_level_generator",
                 staged.useGenerator, v => { staged.useGenerator = v; Relayout(); }, true));
 
             void AddBodyRow(GameObject row) { gen.Add(row); genBody.Add(row); }
@@ -401,7 +405,7 @@ namespace StarLevelSystem.modules.UI {
                 if (s != null && Mathf.Approximately(s.value, value) == false) { s.value = value; }
             }
 
-            curveStartRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Curve start level", 1f, 50f, staged.generator.MinLevel, true, v => {
+            curveStartRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_curve_start_level", 1f, 50f, staged.generator.MinLevel, true, v => {
                 staged.generator.MinLevel = (int)v;
                 if (staged.generator.MaxLevel < staged.generator.MinLevel) {
                     staged.generator.MaxLevel = staged.generator.MinLevel;
@@ -410,7 +414,7 @@ namespace StarLevelSystem.modules.UI {
                 Relayout();
             });
             AddBodyRow(curveStartRow);
-            curveEndRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Curve end level", 1f, 200f, staged.generator.MaxLevel, true, v => {
+            curveEndRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_curve_end_level", 1f, 200f, staged.generator.MaxLevel, true, v => {
                 staged.generator.MaxLevel = (int)v;
                 if (staged.generator.MinLevel > staged.generator.MaxLevel) {
                     staged.generator.MinLevel = staged.generator.MaxLevel;
@@ -419,15 +423,15 @@ namespace StarLevelSystem.modules.UI {
                 Relayout();
             });
             AddBodyRow(curveEndRow);
-            AddBodyRow(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Level-up chance", 0f, 1f, staged.generator.LevelUpChance, false, v => {
+            AddBodyRow(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_level_up_chance", 0f, 1f, staged.generator.LevelUpChance, false, v => {
                 staged.generator.LevelUpChance = v;
                 UpdateGeneratorPreview();
             }));
-            AddBodyRow(ConfigUI.AddEnumCycleRow(parent, RightColWidth, LabelWidth, 150f, "Curve style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
+            AddBodyRow(ConfigUI.AddEnumCycleRow(parent, RightColWidth, LabelWidth, 150f, "$sls_cfg_curve_style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
                 staged.generator.LevelupCalculationStyle = (LevelupCalculationStyle)i;
                 Relayout();
             }));
-            GameObject offsetRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Gaussian offset", -1f, 1f, staged.generator.GaussianOffset, false, v => {
+            GameObject offsetRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_gaussian_offset", -1f, 1f, staged.generator.GaussianOffset, false, v => {
                 staged.generator.GaussianOffset = v;
                 UpdateGeneratorPreview();
             });
@@ -435,13 +439,13 @@ namespace StarLevelSystem.modules.UI {
             AddBodyRow(offsetRow);
             // Width of the bell. It used to be driven by the level-up chance slider, which is why that
             // slider appeared to do nothing under this style.
-            GameObject spreadRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Gaussian spread", 0.05f, 1f, staged.generator.GaussianSpread, false, v => {
+            GameObject spreadRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_gaussian_spread", 0.05f, 1f, staged.generator.GaussianSpread, false, v => {
                 staged.generator.GaussianSpread = v;
                 UpdateGeneratorPreview();
             });
             gaussianRows.Add(spreadRow);
             AddBodyRow(spreadRow);
-            AddBodyRow(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "Night multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => staged.generator.NightMultiplier = v));
+            AddBodyRow(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_night_multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => staged.generator.NightMultiplier = v));
 
             // Table style only works for level counts that have a hand-authored shape in
             // LevelupWeightTablesBySpan, and there is no editor for those here. Saying so beats the
@@ -468,19 +472,19 @@ namespace StarLevelSystem.modules.UI {
             const float StartY = 4f;
 
             // Full-width header + intro across the top.
-            GameObject header = ConfigUI.AddHeaderRow(parent, FullWidth, "Raids", TextAnchor.MiddleCenter);
+            GameObject header = ConfigUI.AddHeaderRow(parent, FullWidth, "$sls_cfg_raids", TextAnchor.MiddleCenter);
             ConfigUI.PositionRow(header, 0f, StartY);
-            GameObject intro = ConfigUI.AddTextRow(parent, FullWidth, 40f, "StarLevelSystem replaces vanilla raids with its own configurable raids. Detailed per-raid settings live in RaidSettings.yaml.", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter);
+            GameObject intro = ConfigUI.AddTextRow(parent, FullWidth, 40f, "$sls_cfg_starlevelsystem_replaces_vanilla_raids_with_its", 13, GUIManager.Instance.ValheimBeige, TextAnchor.UpperCenter);
             ConfigUI.PositionRow(intro, 0f, StartY + RowHeight + RowGap);
             float colStartY = StartY + RowHeight + RowGap + 40f + 8f;
 
             // Left column - global raid settings.
             List<GameObject> left = new List<GameObject> {
-                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Enable SLS Raids", staged.enableSlsRaids, v => staged.enableSlsRaids = v, true),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Raid frequency (lower = more often)", 0.001f, 10f, staged.raidEventRate, false, v => staged.raidEventRate = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Minutes between checks", 1f, 120f, staged.raidCheckMinutes, true, v => staged.raidCheckMinutes = (int)v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max attempts / player", 0f, 50f, staged.maxRaidAttempts, true, v => staged.maxRaidAttempts = (int)v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "Max active raids", 1f, 100f, staged.maxActiveRaids, true, v => staged.maxActiveRaids = (int)v),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "$sls_cfg_enable_sls_raids", staged.enableSlsRaids, v => staged.enableSlsRaids = v, true),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_raid_frequency_lower_more_often", 0.001f, 10f, staged.raidEventRate, false, v => staged.raidEventRate = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_minutes_between_checks", 1f, 120f, staged.raidCheckMinutes, true, v => staged.raidCheckMinutes = (int)v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_max_attempts_per_player", 0f, 50f, staged.maxRaidAttempts, true, v => staged.maxRaidAttempts = (int)v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_max_active_raids", 1f, 100f, staged.maxActiveRaids, true, v => staged.maxActiveRaids = (int)v),
             };
             ConfigUI.LayoutColumn(left, 0f, colStartY);
 
@@ -489,7 +493,7 @@ namespace StarLevelSystem.modules.UI {
             const float ScrollX = 446f;
             const float ScrollW = 402f;
             const float ScrollH = 398f;
-            ConfigUI.AddText(parent, ScrollX, colStartY, ScrollW, RowHeight, "Enable / disable raids", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
+            ConfigUI.AddText(parent, ScrollX, colStartY, ScrollW, RowHeight, "$sls_cfg_enable_per_disable_raids", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
             // Through the UI kit rather than hand-rolled: the two copies of this here were missing its
             // scrollSensitivity, so the raid and modifier lists scrolled several times slower than every
             // other list in the mod.
@@ -543,30 +547,30 @@ namespace StarLevelSystem.modules.UI {
             const float StartY = 4f;
 
             // Full-width intro describing the system.
-            GameObject intro = ConfigUI.AddTextRow(parent, PanelW - 2 * Margin, 40f, "The Nemesis system is a personal game manager that can tune up or down the world around you or your group.", 14, GUIManager.Instance.ValheimBeige);
+            GameObject intro = ConfigUI.AddTextRow(parent, PanelW - 2 * Margin, 40f, "$sls_cfg_the_nemesis_system_is_a_personal_game_manager_th", 14, GUIManager.Instance.ValheimBeige);
             ConfigUI.PositionRow(intro, 0f, StartY);
             float colStartY = StartY + 44f;
 
             // Left column - core nemesis settings.
             List<GameObject> left = new List<GameObject> {
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Nemesis settings"),
-                ConfigUI.AddToggleRow(parent, LeftColWidth, LeftLabelWidth + 60f, "Enable Nemesis system", staged.enableNemesis, v => staged.enableNemesis = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Action cooldown (sec)", 0f, 120f, staged.nemCooldown, false, v => staged.nemCooldown = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Influence radius (m)", 0f, 1000f, staged.nemInfluence, false, v => staged.nemInfluence = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Min spawn distance (m)", 0f, 500f, staged.nemMinSpawn, false, v => staged.nemMinSpawn = v),
+                ConfigUI.AddHeaderRow(parent, LeftColWidth, "$sls_cfg_nemesis_settings"),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, LeftLabelWidth + 60f, "$sls_cfg_enable_nemesis_system", staged.enableNemesis, v => staged.enableNemesis = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_action_cooldown_sec", 0f, 120f, staged.nemCooldown, false, v => staged.nemCooldown = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_influence_radius_m", 0f, 1000f, staged.nemInfluence, false, v => staged.nemInfluence = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_min_spawn_distance_m", 0f, 500f, staged.nemMinSpawn, false, v => staged.nemMinSpawn = v),
             };
             ConfigUI.LayoutColumn(left, 0f, colStartY);
 
             // Right column - core subset of the score system.
             List<GameObject> right = new List<GameObject> {
-                ConfigUI.AddHeaderRow(parent, RightColWidth, "Score system"),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Neutral score", 0f, 20000f, staged.neutralScore, false, v => staged.neutralScore = v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Min score", 0f, 20000f, staged.minScore, false, v => staged.minScore = v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Max score", 0f, 20000f, staged.maxScore, false, v => staged.maxScore = v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Decay per update", 0f, 2000f, staged.decayPerUpdate, false, v => staged.decayPerUpdate = v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Score interval (sec)", 1f, 120f, staged.scoreInterval, false, v => staged.scoreInterval = v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Boss-kill bonus", 0f, 5000f, staged.bossKillBonus, false, v => staged.bossKillBonus = v),
-                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "Death score reduction", 0f, 5000f, staged.deathReduction, false, v => staged.deathReduction = v),
+                ConfigUI.AddHeaderRow(parent, RightColWidth, "$sls_cfg_score_system"),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "$sls_cfg_neutral_score", 0f, 20000f, staged.neutralScore, false, v => staged.neutralScore = v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "$sls_cfg_min_score", 0f, 20000f, staged.minScore, false, v => staged.minScore = v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "$sls_cfg_max_score", 0f, 20000f, staged.maxScore, false, v => staged.maxScore = v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "$sls_cfg_decay_per_update", 0f, 2000f, staged.decayPerUpdate, false, v => staged.decayPerUpdate = v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "$sls_cfg_score_interval_sec", 1f, 120f, staged.scoreInterval, false, v => staged.scoreInterval = v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "$sls_cfg_boss_kill_bonus", 0f, 5000f, staged.bossKillBonus, false, v => staged.bossKillBonus = v),
+                ConfigUI.AddSliderRow(parent, RightColWidth, RightLabelWidth, RightSliderWidth, RightValueWidth, "$sls_cfg_death_score_reduction", 0f, 5000f, staged.deathReduction, false, v => staged.deathReduction = v),
             };
             ConfigUI.LayoutColumn(right, RightColumnX, colStartY);
         }
@@ -580,20 +584,20 @@ namespace StarLevelSystem.modules.UI {
             const float StartY = 4f;
 
             List<GameObject> left = new List<GameObject> {
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Creature modifiers"),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max major modifiers", 0f, 20f, staged.maxMajor, true, v => staged.maxMajor = (int)v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max minor modifiers", 0f, 20f, staged.maxMinor, true, v => staged.maxMinor = (int)v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Major modifier chance", 0f, 1f, staged.chanceMajor, false, v => staged.chanceMajor = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Minor modifier chance", 0f, 1f, staged.chanceMinor, false, v => staged.chanceMinor = v),
-                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Limit modifier count to star level", staged.limitToStarLevel, v => staged.limitToStarLevel = v),
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Boss modifiers"),
-                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Bosses can have modifiers", staged.enableBossMods, v => staged.enableBossMods = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Boss modifier chance", 0f, 1f, staged.chanceBoss, false, v => staged.chanceBoss = v),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max boss modifiers", 0f, 20f, staged.maxBossMods, true, v => staged.maxBossMods = (int)v),
-                ConfigUI.AddHeaderRow(parent, LeftColWidth, "Modifier display"),
-                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "Max name prefixes", 0f, 20f, staged.prefixLimit, true, v => staged.prefixLimit = (int)v),
-                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "Minor modifiers first in name", staged.minorFirst, v => staged.minorFirst = v),
-                ConfigUI.AddEnumCycleRow(parent, LeftColWidth, LeftLabelWidth, 150f, "Icon display style", DisplayStyleOptions, (int)staged.displayStyle, i => staged.displayStyle = (ModifierDisplayStyle)i),
+                ConfigUI.AddHeaderRow(parent, LeftColWidth, "$sls_cfg_creature_modifiers"),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_max_major_modifiers", 0f, 20f, staged.maxMajor, true, v => staged.maxMajor = (int)v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_max_minor_modifiers", 0f, 20f, staged.maxMinor, true, v => staged.maxMinor = (int)v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_major_modifier_chance", 0f, 1f, staged.chanceMajor, false, v => staged.chanceMajor = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_minor_modifier_chance", 0f, 1f, staged.chanceMinor, false, v => staged.chanceMinor = v),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "$sls_cfg_limit_modifier_count_to_star_level", staged.limitToStarLevel, v => staged.limitToStarLevel = v),
+                ConfigUI.AddHeaderRow(parent, LeftColWidth, "$sls_cfg_boss_modifiers"),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "$sls_cfg_bosses_can_have_modifiers", staged.enableBossMods, v => staged.enableBossMods = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_boss_modifier_chance", 0f, 1f, staged.chanceBoss, false, v => staged.chanceBoss = v),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_max_boss_modifiers", 0f, 20f, staged.maxBossMods, true, v => staged.maxBossMods = (int)v),
+                ConfigUI.AddHeaderRow(parent, LeftColWidth, "$sls_cfg_modifier_display"),
+                ConfigUI.AddSliderRow(parent, LeftColWidth, LeftLabelWidth, LeftSliderWidth, LeftValueWidth, "$sls_cfg_max_name_prefixes", 0f, 20f, staged.prefixLimit, true, v => staged.prefixLimit = (int)v),
+                ConfigUI.AddToggleRow(parent, LeftColWidth, ToggleLabelWidth, "$sls_cfg_minor_modifiers_first_in_name", staged.minorFirst, v => staged.minorFirst = v),
+                ConfigUI.AddEnumCycleRow(parent, LeftColWidth, LeftLabelWidth, 150f, "$sls_cfg_icon_display_style", DisplayStyleOptions, (int)staged.displayStyle, i => staged.displayStyle = (ModifierDisplayStyle)i),
             };
             ConfigUI.LayoutColumn(left, 0f, StartY);
 
@@ -602,12 +606,12 @@ namespace StarLevelSystem.modules.UI {
             const float ScrollX = 446f;
             const float ScrollW = 400f;
             const float ScrollH = 478f;
-            ConfigUI.AddText(parent, ScrollX, StartY, ScrollW, RowHeight, "Enable / disable modifiers", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
+            ConfigUI.AddText(parent, ScrollX, StartY, ScrollW, RowHeight, "$sls_cfg_enable_per_disable_modifiers", 16, TextAnchor.MiddleLeft, GUIManager.Instance.ValheimYellow);
             ConfigUI.CreateScroll(parent, ScrollX, StartY + RowHeight, ScrollW, ScrollH, out Transform content, out float contentW);
             if (content != null) {
-                AddModifierCategory(content, contentW, "Boss modifiers", ModifierType.Boss, staged.modifierSource?.BossModifiers);
-                AddModifierCategory(content, contentW, "Major modifiers", ModifierType.Major, staged.modifierSource?.MajorModifiers);
-                AddModifierCategory(content, contentW, "Minor modifiers", ModifierType.Minor, staged.modifierSource?.MinorModifiers);
+                AddModifierCategory(content, contentW, "$sls_cfg_cat_boss_modifiers", ModifierType.Boss, staged.modifierSource?.BossModifiers);
+                AddModifierCategory(content, contentW, "$sls_cfg_cat_major_modifiers", ModifierType.Major, staged.modifierSource?.MajorModifiers);
+                AddModifierCategory(content, contentW, "$sls_cfg_cat_minor_modifiers", ModifierType.Minor, staged.modifierSource?.MinorModifiers);
             }
         }
 
@@ -674,7 +678,7 @@ namespace StarLevelSystem.modules.UI {
             if (tableWarnText != null) {
                 int levels = Mathf.Abs(staged.generator.MaxLevel - staged.generator.MinLevel) + 1;
                 tableWarnText.text = TableShapeMissing(staged.generator)
-                    ? $"No LevelupWeightTablesBySpan entry for {levels} levels - the Exponential curve is used instead. Add one to LevelSettings.yaml or narrow the range."
+                    ? $"{levels}: {ConfigUI.L("$sls_cfg_table_span_missing")}"
                     : "";
             }
 
@@ -691,10 +695,10 @@ namespace StarLevelSystem.modules.UI {
                 // threshold[k] is 100 * P(level > k), because the roller walks levels upward and takes the
                 // first whose threshold the roll clears.
                 float stayAtMin = 100f - Mathf.Clamp(curve[min], 0f, 100f);
-                string line = $"Rolls: level {min} = {stayAtMin:0.0}%";
+                string line = $"{ConfigUI.L("$sls_cfg_preview_rolls")}: {ConfigUI.L("$sls_cfg_preview_level")} {min} = {stayAtMin:0.0}%";
                 int mid = min + (max - min) / 2;
                 if (mid > min) { line += $"   >= {mid} = {CurveChance(curve, mid)}"; }
-                if (max > min) { line += $"   {max} (top) = {CurveChance(curve, max)}"; }
+                if (max > min) { line += $"   {max} ({ConfigUI.L("$sls_cfg_preview_top")}) = {CurveChance(curve, max)}"; }
                 generatorPreviewText.text = line;
             } catch (Exception e) {
                 generatorPreviewText.text = "";
@@ -712,22 +716,27 @@ namespace StarLevelSystem.modules.UI {
             if (creatureExampleText != null) {
                 int maxStars = Mathf.Max(0, staged.maxLevel);
                 int medStars = Mathf.Max(0, Mathf.CeilToInt(maxStars / 2f));
-                creatureExampleText.text = FormatCreatureExample("Troll", TrollHp, TrollDmg, medStars, maxStars, staged.creatureHpPerLevel, staged.creatureDmgPerLevel);
+                creatureExampleText.text = FormatCreatureExample("$sls_cfg_example_troll", TrollHp, TrollDmg, medStars, maxStars, staged.creatureHpPerLevel, staged.creatureDmgPerLevel);
             }
             if (bossExampleText != null) {
                 int maxStars = Mathf.Max(0, staged.maxBossLevel);
                 int medStars = Mathf.Max(0, Mathf.CeilToInt(maxStars / 2f));
-                bossExampleText.text = FormatCreatureExample("The Elder (boss)", TheElderHP, TheElderDmg, medStars, maxStars, staged.bossHpPerLevel, staged.bossDmgPerLevel);
+                bossExampleText.text = FormatCreatureExample("$sls_cfg_example_the_elder", TheElderHP, TheElderDmg, medStars, maxStars, staged.bossHpPerLevel, staged.bossDmgPerLevel);
             }
         }
 
         private static string FormatCreatureExample(string name, float baseHp, float baseDmg, int medStars, int maxStars, float hpMul, float dmgMul) {
             float Hp(int stars) => baseHp * (1f + hpMul * stars);
             float Dmg(int stars) => baseDmg * (1f + dmgMul * stars);
-            return $"{name} (base {baseHp:0} HP / {baseDmg:0} dmg)\n" +
-                   $"  Min (0 stars):   {Hp(0):0} HP    {Dmg(0):0} dmg\n" +
-                   $"  Median ({medStars} stars):   {Hp(medStars):0} HP    {Dmg(medStars):0} dmg\n" +
-                   $"  Max ({maxStars} stars):   {Hp(maxStars):0} HP    {Dmg(maxStars):0} dmg\n";
+            // Every word here reached the screen as a literal, including the creature names. The numbers
+            // stay in the format string; the words that surround them are tokens.
+            string hp = ConfigUI.L("$sls_cfg_unit_hp");
+            string dmg = ConfigUI.L("$sls_cfg_unit_dmg");
+            string stars = ConfigUI.L("$sls_cfg_unit_stars");
+            return $"{ConfigUI.L(name)} ({ConfigUI.L("$sls_cfg_example_base")} {baseHp:0} {hp} / {baseDmg:0} {dmg})\n" +
+                   $"  {ConfigUI.L("$sls_cfg_example_min")} (0 {stars}):   {Hp(0):0} {hp}    {Dmg(0):0} {dmg}\n" +
+                   $"  {ConfigUI.L("$sls_cfg_example_median")} ({medStars} {stars}):   {Hp(medStars):0} {hp}    {Dmg(medStars):0} {dmg}\n" +
+                   $"  {ConfigUI.L("$sls_cfg_example_max")} ({maxStars} {stars}):   {Hp(maxStars):0} {hp}    {Dmg(maxStars):0} {dmg}\n";
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -804,7 +813,7 @@ namespace StarLevelSystem.modules.UI {
 
         private static void OnConfigurationChangedElsewhere() {
             if (panel == null) { return; }
-            SetMessage("The configuration changed elsewhere. These values are stale - Cancel and reopen, or save to overwrite.");
+            SetMessage("$sls_cfg_status_stale");
         }
 
         // The coloured version: errors in red, warnings in amber, through the UI kit's own painter.
@@ -875,7 +884,7 @@ namespace StarLevelSystem.modules.UI {
                         }
                     }
                     if (applyErrors.Count > 0) {
-                        ReportFailure("Nothing was saved");
+                        ReportFailure("$sls_cfg_status_nothing_saved");
                         return;
                     }
                 }
@@ -889,14 +898,14 @@ namespace StarLevelSystem.modules.UI {
                         }
                     }
                     if (applyErrors.Count > 0) {
-                        ReportFailure("Some settings were not saved");
+                        ReportFailure("$sls_cfg_status_some_not_saved");
                         return;
                     }
                     if (applyWarnings.Count > 0) {
                         // Saved, but not silently: closing over a wall of warnings is how an admin ends up
                         // believing a setting took effect when the file says otherwise.
                         Logger.LogInfo($"QuickConfigureTool applied and saved configuration with {applyWarnings.Count} warning(s).");
-                        ShowReport("Saved, with warnings - press Cancel to close:");
+                        ShowReport("$sls_cfg_status_saved_warnings");
                         return;
                     }
                     Logger.LogInfo("QuickConfigureTool applied and saved configuration.");
@@ -918,7 +927,7 @@ namespace StarLevelSystem.modules.UI {
                     }
                 }
                 if (pendingRemoteEdits.Count > 0) {
-                    SetMessage($"Sent to the server, waiting for {pendingRemoteEdits.Count} file(s)...");
+                    SetMessage($"{ConfigUI.L("$sls_cfg_status_sent_waiting")} ({pendingRemoteEdits.Count})");
                     return;
                 }
                 if (applyErrors.Count > 0) {
@@ -931,7 +940,7 @@ namespace StarLevelSystem.modules.UI {
                 // ClosePanel is deliberately NOT in a finally: a mid-apply failure leaves configuration
                 // half-written, and closing the window over it is how an admin ends up believing the save
                 // landed. Leave the panel up with their edits intact.
-                SetMessage("Save failed - see the log for details.");
+                SetMessage("$sls_cfg_status_save_failed");
                 Logger.LogWarning($"QuickConfigureTool failed to apply configuration: {e}");
             }
         }
@@ -967,16 +976,16 @@ namespace StarLevelSystem.modules.UI {
                 applyWarnings.Add($"{file.FileName}: {message}");
             }
             if (pendingRemoteEdits.Count > 0) {
-                SetMessage($"Waiting for the server ({pendingRemoteEdits.Count} file(s) left)...");
+                SetMessage($"{ConfigUI.L("$sls_cfg_status_waiting_left")} ({pendingRemoteEdits.Count})");
                 return;
             }
             if (applyErrors.Count > 0) {
-                ReportFailure("The server refused some settings");
+                ReportFailure("$sls_cfg_status_server_refused");
                 return;
             }
             if (applyWarnings.Count > 0) {
                 Logger.LogInfo($"The server accepted the configuration with {applyWarnings.Count} warning(s).");
-                ShowReport("The server accepted this, with warnings - press Cancel to close:");
+                ShowReport("$sls_cfg_status_server_warnings");
                 return;
             }
             Logger.LogInfo("The server accepted the configuration.");
