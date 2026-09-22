@@ -1,8 +1,8 @@
 ﻿{
-  "name": "StarLevelSystem",
-  "description": "We have two levels yes, but why not... MORE?",
+  "name": "StarLevelSystemFixed",
+  "description": "Star Level System with the config panel and level system fixed. Fork of MidnightsFX StarLevelSystem.",
   "version_number": "1.12.0",
-  "website_url": "https://discord.gg/Dmr9PQTy9m",
+  "website_url": "https://github.com/NeocorDK/Valheim_Star_Levels_Fixed",
   "dependencies": [
     "denikson-BepInExPack_Valheim-5.4.2333",
     "ValheimModding-Jotunn-2.29.2",

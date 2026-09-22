@@ -15,11 +15,11 @@ publish:
     enabled: true
 
   discord:
-    enabled: true
+    enabled: false                    # the upstream project's Discord, not this fork's
 
   thunderstore:
     enabled: true
-    author_name: MidnightMods          # the Thunderstore TEAM, not your username
+    author_name: Neocor                # the Thunderstore TEAM, not your username
     communities: [valheim]
     categories: []                    # optional
     has_nsfw_content: false           # optional, default false
@@ -27,11 +27,14 @@ publish:
   hexium:
     enabled: false
     base_url: https://valheim.hexium.gg   # required: the community subdomain
-    author_name: MidnightsFX
+    author_name: Neocor
     communities: [valheim]
 
+  # Disabled: mod_id/file_id below belong to the UPSTREAM mod page. Publishing from this
+  # fork would push releases onto someone else's Nexus listing. Fill in this fork's own
+  # ids before enabling.
   nexus:
-    enabled: true
+    enabled: false
     file_id: 7318334                  # required: an EXISTING file on the mod page
     mod_id: 3137                      # required only when send_changelog is true
     send_changelog: true              # posts the CHANGELOG entry for this version

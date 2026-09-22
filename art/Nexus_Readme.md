@@ -1,6 +1,6 @@
 StarLevelSystem
 
-[img]https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/TitleHeader.png?raw=true[/img]
+[img]https://github.com/NeocorDK/Valheim_Star_Levels_Fixed/blob/master/art/TitleHeader.png?raw=true[/img]
 Star Level Systems expands upon the Valheim star system and allows extensive customization.
 Features:
 [list]
@@ -44,10 +44,10 @@ Features:
 [/list]
 [/*]
 [/list]
-[img]https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/Header.png?raw=true[/img]Features
+[img]https://github.com/NeocorDK/Valheim_Star_Levels_Fixed/blob/master/art/Header.png?raw=true[/img]Features
 Levels, Levels and more Levels (LevelSettings.yaml)So you want creatures to have more levels, but you don't want to die instantly to a level 100 boar when you start the game? Well have I got the config file for you.Level settings allows configuration of creature levelup chance, creature stats, max level, increased level up chance based on distance from the center- and respectively biome based configs for all of that.Biome ConfigurationLets take a look at some of the things you can do with this, and what better spot to start out than the default All biome configuration (which applies to every creature by default).Here is a section of the default example config, lets walk through what everything does.
 
-NOTE: until nexus supports markdown fully it is recommended to view the readme on the [url=https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded?tab=readme-ov-file#starlevelsystem]github[/url]
+NOTE: until nexus supports markdown fully it is recommended to view the readme on the [url=https://github.com/NeocorDK/Valheim_Star_Levels_Fixed?tab=readme-ov-file#starlevelsystem]github[/url]
 
 [code]
 All:

@@ -1,6 +1,6 @@
 StarLevelSystem
 
-[img]https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/TitleHeader.png?raw=true[/img]
+[img]https://github.com/NeocorDK/Valheim_Star_Levels_Fixed/blob/master/art/TitleHeader.png?raw=true[/img]
 
 Star Level Systems expands upon the Valheim star system and allows extensive customization.
 
@@ -49,15 +49,15 @@ Features:
 
 Got a bug to report or just want to chat about the mod? Drop by the discord or github.
 
-[url=https://discord.gg/Dmr9PQTy9m][img]https://i.imgur.com/uE6umQE.png[/img][/url] [url=https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded][img]https://i.imgur.com/lvbP5OF.png[/img][/url]
+[url=https://discord.gg/Dmr9PQTy9m][img]https://i.imgur.com/uE6umQE.png[/img][/url] [url=https://github.com/NeocorDK/Valheim_Star_Levels_Fixed][img]https://i.imgur.com/lvbP5OF.png[/img][/url]
 
 Below are a few examples of what you might see, and what the mod can do.
 
-[img]https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/blob/master/art/Header.png?raw=true[/img]
+[img]https://github.com/NeocorDK/Valheim_Star_Levels_Fixed/blob/master/art/Header.png?raw=true[/img]
 
 [size=5][b]Features[/b][/size]
 
-NOTE: until nexus supports markdown fully it is recommended to view the readme on the [url=https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded?tab=readme-ov-file#starlevelsystem]github[/url]
+NOTE: until nexus supports markdown fully it is recommended to view the readme on the [url=https://github.com/NeocorDK/Valheim_Star_Levels_Fixed?tab=readme-ov-file#starlevelsystem]github[/url]
 
 [size=4][b]Levels, Levels and more Levels (LevelSettings.yaml)[/b][/size]
 So you want creatures to have more levels, but you don't want to die instantly to a level 100 boar when you start the game?
@@ -414,7 +414,7 @@ Star Level Systems provides a number of terminal commands for debugging and test
 [size=4][b]API Usage (WIP)[/b][/size]
 Star Level Systems provides a public API for other mods to interact with.
 The API currently allows reading, modifying and managing creature stat modifiers, color, and level.
-Check out the API Documentation [url=https://github.com/MidnightsFX/Valheim_Star_Levels_Expanded/tree/master/StarLevelSystem/API]here[/url]
+Check out the API Documentation [url=https://github.com/NeocorDK/Valheim_Star_Levels_Fixed/tree/master/StarLevelSystem/API]here[/url]
 
 
 [size=5][b]Some of my other mods[/b][/size]
