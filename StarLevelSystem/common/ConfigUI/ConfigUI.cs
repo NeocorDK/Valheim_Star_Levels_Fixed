@@ -504,6 +504,27 @@ namespace StarLevelSystem.common {
             return field;
         }
 
+        // A bare numeric field, for a value that has no useful slider range - a hand-authored table entry,
+        // say, where the whole point is typing an exact number. Parsing and formatting go through the same
+        // InvariantCulture helpers the sliders use, so a comma-decimal locale reads 1.5 as one and a half
+        // rather than as fifteen.
+        internal static InputField AddNumberField(Transform parent, float x, float y, float w, float value,
+            bool wholeNumbers, Action<float> onCommit) {
+            InputField field = AddTextField(parent, x, y, w, Fmt(value, wholeNumbers), null,
+                wholeNumbers ? InputField.ContentType.IntegerNumber : InputField.ContentType.DecimalNumber);
+            float committed = value;
+            field.onEndEdit.AddListener(text => {
+                // Unparseable text snaps back to the last good value rather than becoming zero, which is a
+                // legal threshold and would silently change the curve.
+                if (TryParseValue(text, out float parsed) == false) { parsed = committed; }
+                if (wholeNumbers) { parsed = Mathf.Round(parsed); }
+                committed = parsed;
+                field.SetTextWithoutNotify(Fmt(parsed, wholeNumbers));
+                onCommit?.Invoke(parsed);
+            });
+            return field;
+        }
+
         internal static GameObject AddTextFieldRow(Transform parent, float colWidth, float labelW, float fieldW,
             string label, string value, Action<string> onCommit, string placeholder = null, int charLimit = 0) {
             GameObject row = NewRow(parent, colWidth, RowHeight);

@@ -389,6 +389,7 @@ namespace StarLevelSystem.common
             public int MaxLevel { get; set; } = 1;
             [DefaultValue(1)]
             public int MinLevel { get; set; } = 1;
+            [Description("The share of creatures that end up above MinLevel, as a 0-1 fraction: 0.25 leaves 75% of them at MinLevel. The calculation style decides how the rest is spread over the levels above it. Under Exponential it is also the ratio between neighbouring levels.")]
             [DefaultValue(0f)]
             public float LevelUpChance { get; set; }
             [DefaultValue(1f)]
@@ -406,7 +407,10 @@ namespace StarLevelSystem.common
             // thresholds must be strictly decreasing). LevelUpChance is authored as a 0-1 fraction (0.25 == 25%).
             // quiet suppresses the Table style's diagnostics. The in-game editor rebuilds this curve on
             // every slider move to preview it, and those rebuilds must not fill the log.
-            public SortedDictionary<int, float> GetLevelUpDefinition(bool quiet = false) {
+            // tables overrides the settings-wide LevelupWeightTablesBySpan for the Table style. The
+            // in-game editor passes the shape the admin is editing but has not saved yet, so the preview
+            // shows what they are typing rather than what is still on disk.
+            public SortedDictionary<int, float> GetLevelUpDefinition(bool quiet = false, Dictionary<int, SortedDictionary<int, float>> tables = null) {
                 SortedDictionary<int, float> chances = new SortedDictionary<int, float>();
                 int min = MinLevel;
                 int max = MaxLevel;
@@ -424,12 +428,19 @@ namespace StarLevelSystem.common
 
                 switch (this.LevelupCalculationStyle) {
                     case LevelupCalculationStyle.Linear: {
-                        // Threshold ramps linearly from 'start' at MinLevel down to ~0 at MaxLevel.
-                        for (int lvl = min; lvl <= max; lvl++) {
-                            float t = (float)(max - lvl) / span; // 1 at min, 0 at max
-                            float threshold = start * t;
-                            chances.Add(lvl, lvl == max ? epsilon : Mathf.Max(threshold, epsilon));
-                        }
+                        // A linearly DECLINING share per level: level min+1 is the most common of the
+                        // levels above the minimum, max the least, in even steps.
+                        //
+                        // This used to ramp the threshold linearly instead, which is not the same thing
+                        // and is not what the name promises. The roller picks the first level whose
+                        // threshold the roll clears, so what a creature's chance of landing on level L
+                        // actually is, is the GAP between two neighbouring thresholds - and evenly spaced
+                        // thresholds have evenly sized gaps. "Linear" therefore produced a flat,
+                        // uniform distribution across every level above the minimum: with a span of 5 and
+                        // a chance of 0.74 it gave 26% / 18.5% / 18.5% / 18.5% / 18.5%.
+                        double[] weights = new double[span];
+                        for (int i = 0; i < span; i++) { weights[i] = span - i; }
+                        EmitFromWeights(chances, min, max, start, epsilon, weights);
                         break;
                     }
                     case LevelupCalculationStyle.Gaussian: {
@@ -449,25 +460,13 @@ namespace StarLevelSystem.common
                         double twoSigmaSq = 2.0 * sigma * sigma;
                         int reachable = span;   // levels min+1 .. max
                         double[] weights = new double[reachable];
-                        double total = 0.0;
                         for (int i = 0; i < reachable; i++) {
                             // normalized position within the reachable levels, in [-1, 1]
                             float x = reachable == 1 ? 0f : -1f + 2f * i / (reachable - 1);
-                            double w = Math.Exp(-((x - center) * (x - center)) / twoSigmaSq);
-                            weights[i] = w;
-                            total += w;
+                            weights[i] = Math.Exp(-((x - center) * (x - center)) / twoSigmaSq);
                         }
 
-                        chances.Add(min, start);
-                        double cumulative = 0.0;
-                        for (int i = 0; i < reachable; i++) {
-                            // A narrow bell centred far from every sample point underflows to zero across
-                            // the board; spread the mass evenly rather than dividing by zero.
-                            cumulative += total > 0.0 ? weights[i] / total : 1.0 / reachable;
-                            int lvl = min + 1 + i;
-                            float threshold = (float)(start * (1.0 - cumulative));
-                            chances.Add(lvl, lvl == max ? epsilon : Mathf.Max(threshold, epsilon));
-                        }
+                        EmitFromWeights(chances, min, max, start, epsilon, weights);
                         break;
                     }
                     case LevelupCalculationStyle.Table: {
@@ -477,9 +476,9 @@ namespace StarLevelSystem.common
                         // matching table ignores LevelUpChance/GaussianOffset - the exact values come from the
                         // table. LevelUpChance still shapes the Exponential fallback below.
                         int spanCount = span + 1;
-                        Dictionary<int, SortedDictionary<int, float>> tables = LevelSystemData.SLE_Level_Settings?.LevelupWeightTablesBySpan;
+                        Dictionary<int, SortedDictionary<int, float>> lookup = tables ?? LevelSystemData.SLE_Level_Settings?.LevelupWeightTablesBySpan;
                         SortedDictionary<int, float> shape = null;
-                        tables?.TryGetValue(spanCount, out shape);
+                        lookup?.TryGetValue(spanCount, out shape);
 
                         // A missing or too-short table used to emit a single entry at threshold 0, which
                         // the roller always clears -- so every creature came out at MinLevel and stars
@@ -530,10 +529,49 @@ namespace StarLevelSystem.common
 
             // Geometric decay of the threshold from 'start' at MinLevel to ~0 at MaxLevel. Also the
             // fallback the Table style uses when its shape is missing, so it lives on its own.
+            // A geometric decline whose ratio is LevelUpChance itself: each level above the minimum is
+            // 'chance' times as common as the one below it. That is what the slider's name means, and a
+            // chance of 0.25 now produces the 75 / 18.8 / 4.7 / 1.2 / 0.3 anyone would predict from it.
+            //
+            // The old version pinned the decay so the threshold hit epsilon exactly at MaxLevel:
+            //     decay = (epsilon / start) ^ (1 / span)
+            // which made a HIGHER chance decay FASTER. At 0.74 over five levels it gave
+            // 26 / 66 / 7 / 0.8 / 0.09 - the slider did not push creatures up the range at all, it moved
+            // the pile from the first level onto the second. The shape was also set entirely by the span,
+            // so the same chance meant completely different things at different ranges.
             private static void BuildExponential(SortedDictionary<int, float> chances, int min, int max, int span, float start, float epsilon) {
-                float decay = Mathf.Pow(epsilon / start, 1f / span); // start * decay^span == epsilon at max
-                for (int lvl = min; lvl <= max; lvl++) {
-                    float threshold = start * Mathf.Pow(decay, lvl - min);
+                // start is LevelUpChance * 100 and is already clamped into 0.01..100 by the caller.
+                double ratio = start / 100.0;
+                double[] weights = new double[span];
+                for (int i = 0; i < span; i++) { weights[i] = Math.Pow(ratio, i); }
+                EmitFromWeights(chances, min, max, start, epsilon, weights);
+            }
+
+            // The one place a style's weights become the descending threshold table the roller consumes.
+            //
+            // Every style states its curve as "how common is each level", because that is the question an
+            // admin is answering, and it is NOT what the roller reads. The roller takes the first level
+            // whose threshold the roll clears, so a level's real share is the gap between its threshold
+            // and the previous one. Converting once, here, is what stops a style from accidentally
+            // describing a distribution nobody intended - which is exactly how Linear ended up uniform.
+            //
+            // start is the share of creatures that end up ABOVE MinLevel, on the 0-100 roll scale, so
+            // P(exactly MinLevel) is 100 - start whatever the style. weights cover the levels above the
+            // minimum, in order, and are normalised here.
+            private static void EmitFromWeights(SortedDictionary<int, float> chances, int min, int max, float start, float epsilon, double[] weights) {
+                chances.Add(min, start);
+                if (weights == null || weights.Length == 0) { return; }
+
+                double total = 0.0;
+                for (int i = 0; i < weights.Length; i++) { total += weights[i]; }
+
+                double cumulative = 0.0;
+                for (int i = 0; i < weights.Length; i++) {
+                    // Weights that all underflow to zero - a narrow bell centred away from every sample
+                    // point, a ratio of zero - would divide by zero; spread the mass evenly instead.
+                    cumulative += total > 0.0 ? weights[i] / total : 1.0 / weights.Length;
+                    int lvl = min + 1 + i;
+                    float threshold = (float)(start * (1.0 - cumulative));
                     chances.Add(lvl, lvl == max ? epsilon : Mathf.Max(threshold, epsilon));
                 }
             }

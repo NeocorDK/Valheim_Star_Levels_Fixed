@@ -17,7 +17,7 @@
   "sls_cfg_per_level_stats": "Per-level stats",
   "sls_cfg_creature_hp_per_level": "Creature HP / level",
   "sls_cfg_creature_dmg_per_level": "Creature dmg / level",
-  "sls_cfg_max_level_stars": "Max level (stars)",
+  "sls_cfg_max_level_stars": "Max level",
   "sls_cfg_boss_hp_per_level": "Boss HP / level",
   "sls_cfg_boss_dmg_per_level": "Boss dmg / level",
   "sls_cfg_max_boss_level": "Max boss level",
@@ -135,7 +135,7 @@
   "sls_cfg_page_stats": "Stats",
   "sls_cfg_page_level_generator": "Level Generator",
   "sls_cfg_curve_preview": "Curve preview",
-  "sls_cfg_curve_axis": "Share of creatures at each level",
+  "sls_cfg_curve_axis": "Share of creatures at each level (level 1 = no stars, level 2 = 1 star)",
   "sls_cfg_curve_peak": "peak",
   "suffix_moniker": "of",
   "alert_prefix1": "Alert",
@@ -227,5 +227,6 @@
   "SLS_Miniboss_Prefix3": "Twisted",
   "SLS_Miniboss_Prefix4": "Enraged",
   "SLS_Miniboss_Prefix5": "Vengeful",
-  "SLS_Miniboss_Prefix6": "Warmonger"
+  "SLS_Miniboss_Prefix6": "Warmonger",
+  "sls_cfg_table_hint": "Table shape for this span - the roll each level must clear, highest first"
 }

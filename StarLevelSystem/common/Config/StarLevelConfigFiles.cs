@@ -182,6 +182,17 @@ namespace StarLevelSystem.common {
 # --- Level generators ---
 # Instead of hand-writing chance tables, generators expand a Min/Max level plus
 # a curve style (Linear, Exponential, Gaussian, Table) into a table at load.
+#
+# Every style answers the same question - how common is each level - and states
+# it the same way. LevelUpChance is the share of creatures that end up ABOVE
+# MinLevel, so a chance of 0.25 leaves 75% of them at MinLevel whatever the
+# style; the style then decides how the remaining 25% is spread over the levels
+# above it:
+#   Linear       an even decline, MinLevel+1 the most common, MaxLevel the least
+#   Exponential  each level is 'LevelUpChance' times as common as the one below
+#                (0.25 gives roughly 75 / 18.8 / 4.7 / 1.2 / 0.3 over five levels)
+#   Gaussian     a bell, placed by GaussianOffset and widened by GaussianSpread
+#   Table        an explicit hand-authored shape, see below
 # Name them in CustomLevelupGenerators, then reference them anywhere a
 # LevelupGeneratorRefs list exists (defaults, biomes, creatures, raids,
 # nemesis spawns). When present, the generated curve REPLACES that section's

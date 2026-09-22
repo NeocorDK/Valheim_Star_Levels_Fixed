@@ -80,6 +80,11 @@ namespace StarLevelSystem.modules.UI {
         private static Text tableWarnText;
         private static GameObject curveGraphRoot;
         private const float GraphH = 300f;
+        private static GameObject tableEditorRoot;
+        private static List<GameObject> tableEditorRows;
+        private const float TableEditorY = 370f;
+        private const float TableEditorH = 150f;
+        private const float TableEditorW = 430f;
         private static Text messageText;
         private static GameObject backBtn;
         private static GameObject cancelBtn;
@@ -205,6 +210,9 @@ namespace StarLevelSystem.modules.UI {
             generatorPreviewText = null;
             tableWarnText = null;
             curveGraphRoot = null;
+            tableEditorRoot = null;
+            tableEditorRows = null;
+            tableEditorSpan = -1;
             titleText = null;
             if (panel != null) {
                 UnityEngine.Object.Destroy(panel);
@@ -399,6 +407,18 @@ namespace StarLevelSystem.modules.UI {
 
             void Relayout() {
                 bool on = staged.useGenerator;
+                bool showTable = on && staged.generator.LevelupCalculationStyle == LevelupCalculationStyle.Table;
+
+                // Before the visibility pass, not after: the editor seeds a shape for this span when there
+                // is none, and the Table warning below asks whether a shape exists. Rebuilding afterwards
+                // left the warning contradicting the editor sitting right under it for one interaction.
+                if (tableEditorRows != null) {
+                    foreach (GameObject row in tableEditorRows) {
+                        if (row != null) { row.SetActive(showTable); }
+                    }
+                }
+                if (showTable) { RebuildTableEditor(); }
+
                 foreach (GameObject row in genBody) {
                     if (row == null) { continue; }
                     if (gaussianRows.Contains(row)) {
@@ -492,6 +512,17 @@ namespace StarLevelSystem.modules.UI {
             genBody.Add(previewRow);
 
             Relayout();
+            // --- Table style: the shape editor ---------------------------------------------------
+            //
+            // Selecting Table used to leave the admin with nothing to edit: the shapes live in
+            // LevelupWeightTablesBySpan, the panel had no field for them, and the visible sliders stopped
+            // affecting anything. One row per level, seeded from the curve that would otherwise be used,
+            // so a first-time table starts from something sensible rather than from zeroes.
+            tableEditorRoot = ConfigUI.NewRect("TableEditor", parent, 0f, TableEditorY, ColWidth, TableEditorH);
+            GameObject tableHint = ConfigUI.AddTextRow(parent, ColWidth, 20f, "$sls_cfg_table_hint", 11, GUIManager.Instance.ValheimBeige);
+            ConfigUI.PositionRow(tableHint, 0f, TableEditorY - 22f);
+            tableEditorRows = new List<GameObject>() { tableEditorRoot, tableHint };
+
             // The rolls line and the Table warning sit under the graph, where a wrapped two-line warning
             // has somewhere to go.
             float underGraph = StartY + RowHeight + RowGap + GraphH + 28f;
@@ -698,7 +729,7 @@ namespace StarLevelSystem.modules.UI {
             int min = Mathf.Min(gen.MinLevel, gen.MaxLevel);
             int max = Mathf.Max(gen.MinLevel, gen.MaxLevel);
             if (max == min) { return false; }
-            Dictionary<int, SortedDictionary<int, float>> tables = LevelSystemData.SLE_Level_Settings?.LevelupWeightTablesBySpan;
+            Dictionary<int, SortedDictionary<int, float>> tables = staged?.tables ?? LevelSystemData.SLE_Level_Settings?.LevelupWeightTablesBySpan;
             if (tables == null) { return true; }
             return tables.TryGetValue(max - min + 1, out SortedDictionary<int, float> shape) == false
                 || shape == null || shape.Count < max - min + 1;
@@ -719,7 +750,7 @@ namespace StarLevelSystem.modules.UI {
 
             if (generatorPreviewText == null) { ClearCurveGraph(); return; }
             try {
-                SortedDictionary<int, float> curve = staged.generator.GetLevelUpDefinition(quiet: true);
+                SortedDictionary<int, float> curve = staged.generator.GetLevelUpDefinition(quiet: true, tables: staged.tables);
                 if (curve == null || curve.Count == 0) { generatorPreviewText.text = ""; ClearCurveGraph(); return; }
 
                 int min = int.MaxValue, max = int.MinValue;
@@ -741,6 +772,76 @@ namespace StarLevelSystem.modules.UI {
                 ClearCurveGraph();
                 Logger.LogDebug($"Could not preview the level generator curve: {e.Message}");
             }
+        }
+
+        // One editable threshold per level of the generator's current span.
+        //
+        // The stored format is thresholds, not shares - that is what LevelupWeightTablesBySpan has always
+        // held and what the shipped 4/5/6-level shapes contain, so the editor writes the same thing rather
+        // than silently reinterpreting existing files. The graph above turns them into shares live, which
+        // is the feedback that was missing: a table used to be authored blind.
+        private static void RebuildTableEditor() {
+            if (tableEditorRoot == null || staged?.generator == null) { return; }
+
+            int min = Mathf.Min(staged.generator.MinLevel, staged.generator.MaxLevel);
+            int max = Mathf.Max(staged.generator.MinLevel, staged.generator.MaxLevel);
+            int span = max - min + 1;
+            if (tableEditorSpan == span && tableEditorRoot.transform.childCount > 0) { return; }
+            tableEditorSpan = span;
+
+            List<Transform> stale = new List<Transform>();
+            foreach (Transform child in tableEditorRoot.transform) { stale.Add(child); }
+            foreach (Transform child in stale) {
+                child.SetParent(null, false);
+                UnityEngine.Object.Destroy(child.gameObject);
+            }
+
+            SortedDictionary<int, float> shape = EnsureTableShape(span, min, max);
+
+            ConfigUI.CreateScroll(tableEditorRoot.transform, 0f, 0f, TableEditorW, TableEditorH,
+                out Transform content, out float contentW);
+            if (content == null) { return; }
+
+            int position = 0;
+            foreach (int key in new List<int>(shape.Keys)) {
+                int levelKey = key;                      // capture for the closure
+                int shownLevel = min + position;
+                position++;
+                GameObject row = ConfigUI.NewLayoutRow(content, contentW, 28f);
+                ConfigUI.AddText(row.transform, 4f, 4f, 150f, 22f,
+                    $"{ConfigUI.L("$sls_cfg_preview_level")} {shownLevel}", 13, TextAnchor.MiddleLeft,
+                    GUIManager.Instance.ValheimBeige);
+                ConfigUI.AddNumberField(row.transform, 160f, 1f, 90f, shape[levelKey], false, v => {
+                    shape[levelKey] = v;
+                    UpdateGeneratorPreview();
+                });
+            }
+        }
+
+        private static int tableEditorSpan = -1;
+
+        // The shape for this span, creating one from the curve that would otherwise be used so a new table
+        // opens on a sensible starting point instead of a column of zeroes.
+        private static SortedDictionary<int, float> EnsureTableShape(int span, int min, int max) {
+            staged.tables ??= new Dictionary<int, SortedDictionary<int, float>>();
+            if (staged.tables.TryGetValue(span, out SortedDictionary<int, float> shape)
+                && shape != null && shape.Count >= span) {
+                return shape;
+            }
+
+            shape = new SortedDictionary<int, float>();
+            LevelGenerator seed = new LevelGenerator() {
+                MinLevel = min,
+                MaxLevel = max,
+                LevelUpChance = staged.generator.LevelUpChance,
+                LevelupCalculationStyle = LevelupCalculationStyle.Exponential,
+                NightMultiplier = staged.generator.NightMultiplier,
+            };
+            foreach (KeyValuePair<int, float> kvp in seed.GetLevelUpDefinition(quiet: true)) {
+                shape[kvp.Key] = Mathf.Round(kvp.Value * 100f) / 100f;
+            }
+            staged.tables[span] = shape;
+            return shape;
         }
 
         // One bar per level, height proportional to the share of creatures that come out AT that level.
@@ -1196,6 +1297,15 @@ namespace StarLevelSystem.modules.UI {
                 } else {
                     settings.DefaultLevelupGenerators[0] = staged.generator;
                 }
+                // Only the span the generator actually uses. Writing every span the editor happens to be
+                // holding would resurrect shapes an admin had deleted from the file by hand.
+                if (staged.generator.LevelupCalculationStyle == LevelupCalculationStyle.Table && staged.tables != null) {
+                    int span = Mathf.Abs(staged.generator.MaxLevel - staged.generator.MinLevel) + 1;
+                    if (staged.tables.TryGetValue(span, out SortedDictionary<int, float> shape) && shape != null && shape.Count > 0) {
+                        settings.LevelupWeightTablesBySpan ??= new Dictionary<int, SortedDictionary<int, float>>();
+                        settings.LevelupWeightTablesBySpan[span] = new SortedDictionary<int, float>(shape);
+                    }
+                }
             } else {
                 // Switched off: drop the generators so the authored DefaultCreatureLevelUpChance takes
                 // effect again.
@@ -1380,6 +1490,10 @@ namespace StarLevelSystem.modules.UI {
             // curve. useGenerator is what the admin opted into, generator is only the shape.
             public LevelGenerator generator;
             public bool useGenerator;
+            // The LevelupWeightTablesBySpan shape for the generator's current span, while it is being
+            // edited. Keyed by span, like the setting itself, so switching the range back and forth does
+            // not lose what was typed for the other one.
+            public Dictionary<int, SortedDictionary<int, float>> tables;
 
             public int maxMajor, maxMinor, maxBossMods, prefixLimit;
             public float chanceMajor, chanceMinor, chanceBoss;
@@ -1454,6 +1568,14 @@ namespace StarLevelSystem.modules.UI {
                 s.enableConditional = settings != null && settings.EnableConditionalCreatureLevelupChance;
                 s.useGenerator = settings?.DefaultLevelupGenerators != null && settings.DefaultLevelupGenerators.Count > 0;
                 s.generator = CloneOrDefaultGenerator(settings, s.maxLevel);
+                s.tables = new Dictionary<int, SortedDictionary<int, float>>();
+                if (settings?.LevelupWeightTablesBySpan != null) {
+                    foreach (KeyValuePair<int, SortedDictionary<int, float>> kvp in settings.LevelupWeightTablesBySpan) {
+                        s.tables[kvp.Key] = kvp.Value == null
+                            ? new SortedDictionary<int, float>()
+                            : new SortedDictionary<int, float>(kvp.Value);
+                    }
+                }
 
                 if (!Enum.TryParse(ValConfig.ModifierIconDisplayStyle.Value, out ModifierDisplayStyle ds)) {
                     ds = ModifierDisplayStyle.Stars;
