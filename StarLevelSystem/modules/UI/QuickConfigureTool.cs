@@ -25,7 +25,7 @@ namespace StarLevelSystem.modules.UI {
         private const float RowHeight = 34f;
         private const float SubRowHeight = 26f;
         private const float RowGap = 4f;
-        private const int PageCount = 5;
+        private const int PageCount = 6;
 
         // Sample creatures data | TODO: allow selecting different creature examples?
         private const float TrollHp = 600f;
@@ -78,6 +78,8 @@ namespace StarLevelSystem.modules.UI {
         private static Text titleText;
         private static Text generatorPreviewText;
         private static Text tableWarnText;
+        private static GameObject curveGraphRoot;
+        private const float GraphH = 300f;
         private static Text messageText;
         private static GameObject backBtn;
         private static GameObject cancelBtn;
@@ -202,6 +204,7 @@ namespace StarLevelSystem.modules.UI {
             messageText = null;
             generatorPreviewText = null;
             tableWarnText = null;
+            curveGraphRoot = null;
             titleText = null;
             if (panel != null) {
                 UnityEngine.Object.Destroy(panel);
@@ -230,9 +233,10 @@ namespace StarLevelSystem.modules.UI {
 
             BuildScalingPage(pageRoots[0].transform);
             BuildStatsPage(pageRoots[1].transform);
-            BuildModifiersPage(pageRoots[2].transform);
-            BuildRaidsPage(pageRoots[3].transform);
-            BuildNemesisPage(pageRoots[4].transform);
+            BuildLevelGeneratorPage(pageRoots[2].transform);
+            BuildModifiersPage(pageRoots[3].transform);
+            BuildRaidsPage(pageRoots[4].transform);
+            BuildNemesisPage(pageRoots[5].transform);
 
             float navY = PanelH - 56f;
             // Status line between the nav buttons. ConfigUI.SetMessages exists for exactly this and had
@@ -256,7 +260,7 @@ namespace StarLevelSystem.modules.UI {
             // thirty-odd language files could not reach any of it. Localize falls back to the token's
             // English text when a language file does not carry it, so a missing translation reads as
             // English rather than as a raw token.
-            string[] names = { "$sls_cfg_page_scaling_mechanisms", "$sls_cfg_page_stats_and_level_generator", "$sls_cfg_page_modifiers", "$sls_cfg_page_raids", "$sls_cfg_page_nemesis_system" };
+            string[] names = { "$sls_cfg_page_scaling_mechanisms", "$sls_cfg_page_stats", "$sls_cfg_page_level_generator", "$sls_cfg_page_modifiers", "$sls_cfg_page_raids", "$sls_cfg_page_nemesis_system" };
             titleText.text = $"StarLevelSystem - {ConfigUI.L(names[currentPage])}  ({ConfigUI.L("$sls_cfg_page_word")} {currentPage + 1}/{PageCount})";
 
             backBtn.SetActive(currentPage > 0);
@@ -357,12 +361,38 @@ namespace StarLevelSystem.modules.UI {
             bossExampleText = bossEx.GetComponentInChildren<Text>();
             ConfigUI.PositionRow(bossEx, RightColumnX, StartY + 4 * RowPitch + bossShift);   // aligns with "Boss HP / level"
 
-            // Default level generator below the previews. The Gaussian offset row is tracked so it can be shown
-            // only when the Gaussian curve style is selected.
-            float genStartY = StartY + 6 * RowPitch + bossShift + 8f;
+            UpdateExampleMath();
+        }
+
+        // The level generator gets a page of its own.
+        //
+        // It used to share the stats page's right column, under the two scaling examples, on a root of a
+        // fixed 528px. Seven control rows plus a two-line Table warning plus the rolls line ran past the
+        // bottom of that root: the warning wrapped, the rolls line was clipped, and what was left of it
+        // sat underneath the Next button. There was nowhere to put a real curve preview either. A page is
+        // the unit this panel is built out of, and one page fits all of it with room for the graph.
+        private static void BuildLevelGeneratorPage(Transform parent) {
+            const float ColWidth = 430f;
+            const float GraphX = 456f;
+            const float GraphW = PanelW - 2 * Margin - GraphX;
+            const float LabelWidth = 168f;
+            const float SliderWidth = 150f;
+            const float ValueWidth = 60f;
+            const float StartY = 2f;
+
+            // --- right column: the curve preview -------------------------------------------------
+            GameObject graphHeader = ConfigUI.AddHeaderRow(parent, GraphW, "$sls_cfg_curve_preview");
+            ConfigUI.PositionRow(graphHeader, GraphX, StartY);
+
+            curveGraphRoot = ConfigUI.NewRect("CurveGraph", parent, GraphX, StartY + RowHeight + RowGap, GraphW, GraphH);
+
+            GameObject axisRow = ConfigUI.AddTextRow(parent, GraphW, 22f, "$sls_cfg_curve_axis", 11, GUIManager.Instance.ValheimBeige);
+            ConfigUI.PositionRow(axisRow, GraphX, StartY + RowHeight + RowGap + GraphH + 2f);
+
+            // --- left column: the controls -------------------------------------------------------
             GameObject tableWarnRow = null;
             List<GameObject> gaussianRows = new List<GameObject>();
-            List<GameObject> gen = new List<GameObject> { ConfigUI.AddHeaderRow(parent, RightColWidth, "$sls_cfg_default_level_generator") };
+            List<GameObject> gen = new List<GameObject> { ConfigUI.AddHeaderRow(parent, ColWidth, "$sls_cfg_default_level_generator") };
 
             // Rows that only mean anything once the generator is switched on.
             List<GameObject> genBody = new List<GameObject>();
@@ -379,13 +409,13 @@ namespace StarLevelSystem.modules.UI {
                         row.SetActive(on);
                     }
                 }
-                ConfigUI.LayoutColumn(gen, RightColumnX, genStartY);
+                ConfigUI.LayoutColumn(gen, 0f, StartY);
                 UpdateGeneratorPreview();
             }
 
             // Opting in is explicit. A generator replaces DefaultCreatureLevelUpChance wholesale on the
             // next load, so it must never appear in the file just because someone opened this panel.
-            gen.Add(ConfigUI.AddToggleRow(parent, RightColWidth, LabelWidth + 80f, "$sls_cfg_use_level_generator",
+            gen.Add(ConfigUI.AddToggleRow(parent, ColWidth, LabelWidth + 80f, "$sls_cfg_use_level_generator",
                 staged.useGenerator, v => { staged.useGenerator = v; Relayout(); }, true));
 
             void AddBodyRow(GameObject row) { gen.Add(row); genBody.Add(row); }
@@ -405,7 +435,7 @@ namespace StarLevelSystem.modules.UI {
                 if (s != null && Mathf.Approximately(s.value, value) == false) { s.value = value; }
             }
 
-            curveStartRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_curve_start_level", 1f, 50f, staged.generator.MinLevel, true, v => {
+            curveStartRow = ConfigUI.AddSliderRow(parent, ColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_curve_start_level", 1f, 50f, staged.generator.MinLevel, true, v => {
                 staged.generator.MinLevel = (int)v;
                 if (staged.generator.MaxLevel < staged.generator.MinLevel) {
                     staged.generator.MaxLevel = staged.generator.MinLevel;
@@ -414,7 +444,7 @@ namespace StarLevelSystem.modules.UI {
                 Relayout();
             });
             AddBodyRow(curveStartRow);
-            curveEndRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_curve_end_level", 1f, 200f, staged.generator.MaxLevel, true, v => {
+            curveEndRow = ConfigUI.AddSliderRow(parent, ColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_curve_end_level", 1f, 200f, staged.generator.MaxLevel, true, v => {
                 staged.generator.MaxLevel = (int)v;
                 if (staged.generator.MinLevel > staged.generator.MaxLevel) {
                     staged.generator.MinLevel = staged.generator.MaxLevel;
@@ -423,15 +453,15 @@ namespace StarLevelSystem.modules.UI {
                 Relayout();
             });
             AddBodyRow(curveEndRow);
-            AddBodyRow(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_level_up_chance", 0f, 1f, staged.generator.LevelUpChance, false, v => {
+            AddBodyRow(ConfigUI.AddSliderRow(parent, ColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_level_up_chance", 0f, 1f, staged.generator.LevelUpChance, false, v => {
                 staged.generator.LevelUpChance = v;
                 UpdateGeneratorPreview();
             }));
-            AddBodyRow(ConfigUI.AddEnumCycleRow(parent, RightColWidth, LabelWidth, 150f, "$sls_cfg_curve_style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
+            AddBodyRow(ConfigUI.AddEnumCycleRow(parent, ColWidth, LabelWidth, 150f, "$sls_cfg_curve_style", CalcStyleOptions, (int)staged.generator.LevelupCalculationStyle, i => {
                 staged.generator.LevelupCalculationStyle = (LevelupCalculationStyle)i;
                 Relayout();
             }));
-            GameObject offsetRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_gaussian_offset", -1f, 1f, staged.generator.GaussianOffset, false, v => {
+            GameObject offsetRow = ConfigUI.AddSliderRow(parent, ColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_gaussian_offset", -1f, 1f, staged.generator.GaussianOffset, false, v => {
                 staged.generator.GaussianOffset = v;
                 UpdateGeneratorPreview();
             });
@@ -439,29 +469,34 @@ namespace StarLevelSystem.modules.UI {
             AddBodyRow(offsetRow);
             // Width of the bell. It used to be driven by the level-up chance slider, which is why that
             // slider appeared to do nothing under this style.
-            GameObject spreadRow = ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_gaussian_spread", 0.05f, 1f, staged.generator.GaussianSpread, false, v => {
+            GameObject spreadRow = ConfigUI.AddSliderRow(parent, ColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_gaussian_spread", 0.05f, 1f, staged.generator.GaussianSpread, false, v => {
                 staged.generator.GaussianSpread = v;
                 UpdateGeneratorPreview();
             });
             gaussianRows.Add(spreadRow);
             AddBodyRow(spreadRow);
-            AddBodyRow(ConfigUI.AddSliderRow(parent, RightColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_night_multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => staged.generator.NightMultiplier = v));
+            AddBodyRow(ConfigUI.AddSliderRow(parent, ColWidth, LabelWidth, SliderWidth, ValueWidth, "$sls_cfg_night_multiplier", 0f, 5f, staged.generator.NightMultiplier, false, v => staged.generator.NightMultiplier = v));
 
             // Table style only works for level counts that have a hand-authored shape in
             // LevelupWeightTablesBySpan, and there is no editor for those here. Saying so beats the
             // silent collapse to a single level that used to happen.
-            tableWarnRow = ConfigUI.AddTextRow(parent, RightColWidth, 30f, "", 12, new Color(1f, 0.6f, 0.4f));
+            tableWarnRow = ConfigUI.AddTextRow(parent, ColWidth, 58f, "", 12, new Color(1f, 0.6f, 0.4f));
             tableWarnText = tableWarnRow.GetComponentInChildren<Text>();
-            AddBodyRow(tableWarnRow);
+            genBody.Add(tableWarnRow);
 
             // A line of plain arithmetic beneath the sliders. Without it every curve style is edited
             // blind: the styles differ enormously and none of them is visible until you are in the world.
-            GameObject previewRow = ConfigUI.AddTextRow(parent, RightColWidth, 46f, "", 12, GUIManager.Instance.ValheimBeige);
+            GameObject previewRow = ConfigUI.AddTextRow(parent, ColWidth, 46f, "", 13, GUIManager.Instance.ValheimBeige);
             generatorPreviewText = previewRow.GetComponentInChildren<Text>();
-            AddBodyRow(previewRow);
+            // Tracked for show/hide, but positioned under the graph rather than laid out in the column.
+            genBody.Add(previewRow);
 
             Relayout();
-            UpdateExampleMath();
+            // The rolls line and the Table warning sit under the graph, where a wrapped two-line warning
+            // has somewhere to go.
+            float underGraph = StartY + RowHeight + RowGap + GraphH + 28f;
+            ConfigUI.PositionRow(previewRow, GraphX, underGraph);
+            ConfigUI.PositionRow(tableWarnRow, GraphX, underGraph + 50f);
         }
 
         private static void BuildRaidsPage(Transform parent) {
@@ -682,10 +717,10 @@ namespace StarLevelSystem.modules.UI {
                     : "";
             }
 
-            if (generatorPreviewText == null) { return; }
+            if (generatorPreviewText == null) { ClearCurveGraph(); return; }
             try {
                 SortedDictionary<int, float> curve = staged.generator.GetLevelUpDefinition(quiet: true);
-                if (curve == null || curve.Count == 0) { generatorPreviewText.text = ""; return; }
+                if (curve == null || curve.Count == 0) { generatorPreviewText.text = ""; ClearCurveGraph(); return; }
 
                 int min = int.MaxValue, max = int.MinValue;
                 foreach (int lvl in curve.Keys) {
@@ -700,9 +735,109 @@ namespace StarLevelSystem.modules.UI {
                 if (mid > min) { line += $"   >= {mid} = {CurveChance(curve, mid)}"; }
                 if (max > min) { line += $"   {max} ({ConfigUI.L("$sls_cfg_preview_top")}) = {CurveChance(curve, max)}"; }
                 generatorPreviewText.text = line;
+                RebuildCurveGraph(curve, min, max);
             } catch (Exception e) {
                 generatorPreviewText.text = "";
+                ClearCurveGraph();
                 Logger.LogDebug($"Could not preview the level generator curve: {e.Message}");
+            }
+        }
+
+        // One bar per level, height proportional to the share of creatures that come out AT that level.
+        //
+        // The distribution, not the raw thresholds: a threshold is "the roll you have to clear to go
+        // higher", which reads backwards and is not comparable between levels. What an admin is actually
+        // choosing a curve for is how common each level will be, and that is
+        //   P(exactly min)  = 100 - threshold[min]
+        //   P(exactly L)    = threshold[L-1] - threshold[L]
+        //   P(exactly max)  = threshold[max-1]
+        // which sums to 100 across the range.
+        private static void RebuildCurveGraph(SortedDictionary<int, float> curve, int min, int max) {
+            if (curveGraphRoot == null) { return; }
+            ClearCurveGraph();
+            if (max < min) { return; }
+
+            int span = max - min + 1;
+            // A curve may run to 200 levels and the column is ~390px wide, so past this the bars stop
+            // being readable. Sampling evenly keeps the shape honest; the text line beneath still gives
+            // exact numbers for the ends.
+            const int MaxBars = 44;
+            int step = Mathf.CeilToInt(span / (float)MaxBars);
+            if (step < 1) { step = 1; }
+
+            List<KeyValuePair<int, float>> bars = new List<KeyValuePair<int, float>>();
+            float peak = 0f;
+            for (int lvl = min; lvl <= max; lvl += step) {
+                float share = LevelShare(curve, lvl, min, max);
+                if (share > peak) { peak = share; }
+                bars.Add(new KeyValuePair<int, float>(lvl, share));
+            }
+            if (bars.Count == 0 || peak <= 0f) { return; }
+
+            RectTransform rootRT = (RectTransform)curveGraphRoot.transform;
+            float width = rootRT.sizeDelta.x;
+            float height = rootRT.sizeDelta.y;
+            const float LabelBand = 16f;      // room under the bars for the end labels
+            float plotH = height - LabelBand;
+            float slot = width / bars.Count;
+            float barW = Mathf.Max(2f, slot - 2f);
+
+            for (int i = 0; i < bars.Count; i++) {
+                float norm = bars[i].Value / peak;
+                float h = Mathf.Max(1f, norm * plotH);
+                GameObject bar = ConfigUI.NewUI("Bar", curveGraphRoot.transform, typeof(RectTransform), typeof(Image));
+                RectTransform rt = (RectTransform)bar.transform;
+                rt.anchorMin = new Vector2(0f, 1f);
+                rt.anchorMax = new Vector2(0f, 1f);
+                rt.pivot = new Vector2(0f, 1f);
+                rt.sizeDelta = new Vector2(barW, h);
+                rt.anchoredPosition = new Vector2(i * slot + 1f, -(plotH - h));
+                Image img = bar.GetComponent<Image>();
+                // Warmer towards the tail, so where the rare high levels sit is visible at a glance.
+                float t = bars.Count == 1 ? 0f : i / (float)(bars.Count - 1);
+                img.color = new Color(0.55f + 0.35f * t, 0.55f - 0.15f * t, 0.30f - 0.10f * t, 0.9f);
+                img.raycastTarget = false;
+            }
+
+            // A baseline, so an all-but-empty curve still reads as a chart rather than as nothing.
+            GameObject axis = ConfigUI.NewUI("Axis", curveGraphRoot.transform, typeof(RectTransform), typeof(Image));
+            RectTransform axisRT = (RectTransform)axis.transform;
+            axisRT.anchorMin = new Vector2(0f, 1f);
+            axisRT.anchorMax = new Vector2(0f, 1f);
+            axisRT.pivot = new Vector2(0f, 1f);
+            axisRT.sizeDelta = new Vector2(width, 1f);
+            axisRT.anchoredPosition = new Vector2(0f, -plotH);
+            Image axisImg = axis.GetComponent<Image>();
+            axisImg.color = new Color(0.6f, 0.5f, 0.35f, 0.6f);
+            axisImg.raycastTarget = false;
+
+            ConfigUI.AddText(curveGraphRoot.transform, 0f, plotH + 1f, 60f, LabelBand, min.ToString(), 11,
+                TextAnchor.UpperLeft, GUIManager.Instance.ValheimBeige);
+            if (max > min) {
+                ConfigUI.AddText(curveGraphRoot.transform, width - 60f, plotH + 1f, 60f, LabelBand, max.ToString(), 11,
+                    TextAnchor.UpperRight, GUIManager.Instance.ValheimBeige);
+            }
+            ConfigUI.AddText(curveGraphRoot.transform, 0f, 0f, width, LabelBand, $"{ConfigUI.L("$sls_cfg_curve_peak")} {peak:0.0}%", 11,
+                TextAnchor.UpperRight, GUIManager.Instance.ValheimYellow);
+        }
+
+        private static float LevelShare(SortedDictionary<int, float> curve, int level, int min, int max) {
+            float above = curve.TryGetValue(level, out float t) ? Mathf.Clamp(t, 0f, 100f) : 0f;
+            if (level <= min) { return 100f - above; }
+            float atOrAbove = curve.TryGetValue(level - 1, out float prev) ? Mathf.Clamp(prev, 0f, 100f) : 0f;
+            if (level >= max) { return atOrAbove; }
+            return Mathf.Max(0f, atOrAbove - above);
+        }
+
+        private static void ClearCurveGraph() {
+            if (curveGraphRoot == null) { return; }
+            // Unparent before destroying: Unity defers Destroy to the end of the frame, and the new bars
+            // go in immediately, so leaving them attached draws both sets for a frame on every slider move.
+            List<Transform> stale = new List<Transform>();
+            foreach (Transform child in curveGraphRoot.transform) { stale.Add(child); }
+            foreach (Transform child in stale) {
+                child.SetParent(null, false);
+                UnityEngine.Object.Destroy(child.gameObject);
             }
         }
 

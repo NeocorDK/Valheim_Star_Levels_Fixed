@@ -2,6 +2,7 @@
  ---
  ```
 - The config panel is fully localized. Every heading, label, button and modifier description was a hardcoded English string; all 134 of them are now tokens, so translations can reach the panel
+- The level generator has a page of its own, with a real curve preview: a bar per level showing how common that level will be. It used to share the stats page's right column, where the seven controls, the Table warning and the rolls line ran past the bottom of the page - the warning wrapped, the rolls line was clipped, and what was left of it sat under the Next button
 - The config panel no longer hangs off the edge of the screen. At 1366x768 with GuiScale 1.5 the 900x690 window ran past both edges, taking the nav buttons with it. Any panel that does not fit is now scaled to
 - The config panel says when its values have gone stale. It snapshots the configuration on open, and a server sync or a hand edit used to leave it showing - and then saving back - numbers that were no longer true
 - Validation warnings are shown in the config panel. A rising threshold, a LevelUpChance written as 25 instead of 0.25, or a misspelled enum does not block a save, which is exactly why you have to be told: nothing else says the setting you just wrote is inert
