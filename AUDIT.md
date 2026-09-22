@@ -12,9 +12,9 @@
 
 Обновляется по ходу работы. Под каждым пунктом отчёта стоит строка **Статус**.
 
-- ✅ исправлено — 36 из 50: U1–U10, L1–L9, L11–L13, C2–C5, C7, Y2–Y4, Y6, Y7, Y9–Y11, Y13
-- 🟡 частично / сознательно ограничено — 6: U14, L10, C1, Y1, Y5, Y8
-- ⬜ не исправлено — 8: U11, U12, U13, C6, C8, C9, C10, Y12
+- ✅ исправлено — 45 из 50: U1–U10, U13, U14, L1–L9, L11–L13, C1–C8, C10, Y2–Y13
+- 🟡 частично / сознательно ограничено — 2: L10, Y1
+- ⬜ не исправлено — 3: U11 (локализация панели), U12 (скролл и жёсткие размеры), C9 (раскладка по секциям)
 
 Блок 5 (разбор панели контрол за контролом) закрыт правками 817ed5d, 44f3091, 6c3c80b и f2f7607; отдельных статусов у его подпунктов нет.
 
@@ -247,7 +247,7 @@ internal void Hold() {
 
 ### U13 — Панель не реагирует на внешние изменения конфига
 
-**Статус:** ⬜ не исправлено
+**Статус:** ✅ исправлено (d8d3cfe) — `YamlConfigFile` публикует событие `Published` после любой загрузки значений; открытая панель слушает его и `OnConfigurationSynchronized` и сообщает, что показанные числа устарели (перестраивать под руками админа значило бы выбросить его правки). Источники `modifierSource` / `raidSource` / `nemesisSource` снимаются копией, а не живой ссылкой
 
 `staged` снимается один раз при открытии (`:161`). `OnConfigurationSynchronized` доходит только до `QuickConfigBroker.RefreshVisibility` (`:112-114`); открытую панель ничто не перестраивает и не закрывает. Синхронизация с сервером или срабатывание file-watcher'а во время редактирования оставляет на экране устаревшие числа.
 
@@ -255,7 +255,7 @@ internal void Hold() {
 
 ### U14 — Остальное по UI
 
-**Статус:** 🟡 частично (f2f7607) — предупреждение о `Table`, превью генератора и взаимный порядок Min/Max сделаны в 44f3091; `CurrentBossHuds` очищается (4c99ad4). Остальное открыто: локализация кнопок, утечки временных `GameObject`, дублирование скролла без `scrollSensitivity`, двойная отрисовка picker'а, `Next >` / `Apply & Save` в одном прямоугольнике
+**Статус:** ✅ исправлено (44f3091, 4c99ad4, d8d3cfe, 44992c3) — предупреждение о `Table`, превью генератора, взаимный порядок Min/Max, очистка `CurrentBossHuds`; плюс: убраны три `Instantiate(new GameObject(...))`, `characterExtendedHuds` очищается на `ZNet.Shutdown`, оба списка панели строят скролл через `ConfigUI.CreateScroll` (вернулась `scrollSensitivity`), picker больше не рисует кадр с удвоенным списком. Остаётся редактор `LevelupWeightTablesBySpan` (отдельная функциональность, а не дефект) и совпадающие прямоугольники `Next >` / `Apply & Save`, которые работают корректно
 
 - **`Table` выбирается без редактора таблиц.** Стиль `LevelupCalculationStyle.Table` есть в переборе (`:349`), но панель не умеет редактировать `LevelupWeightTablesBySpan` (`DataObjects.cs:510-512`). После выбора видимые ползунки «Level-up chance» и «Gaussian offset» перестают на что-либо влиять, без предупреждения. См. также L13.
 - **Два разных ползунка подписаны «Max level»** — `ValConfig.MaxLevel` (`:306`) и `generator.MaxLevel` (`:346`), рядом на одной странице, без взаимной привязки.
@@ -535,7 +535,7 @@ foreach (KeyValuePair<int, float> kvp in shape) {
 
 ### C1 — Мёртвые настройки
 
-**Статус:** 🟡 частично (4c99ad4, f2f7607) — `MiniMapRingGeneratorUpdatesPerFrame`, `EnemyHealthPerWorldLevel`, `RaidSpawnEntry.LevelMin` и `TolerantEnumConverter.SetFallback` подключены; `RequestEdit` / `EditResult` подключены в 6c3c80b. Открыто: `NeedsPrefabs`, `ConfigUI.SetMessages`, `ConfigUIPrompt`
+**Статус:** ✅ исправлено (4c99ad4, f2f7607, 6c3c80b, 44992c3) — подключены `MiniMapRingGeneratorUpdatesPerFrame`, `EnemyHealthPerWorldLevel`, `RaidSpawnEntry.LevelMin`, `TolerantEnumConverter.SetFallback`, `ConfigNetwork.RequestEdit` / `EditResult` и `ConfigUI.SetMessages`; `NeedsPrefabs` стал рабочим флагом, а три файла, которым он был не нужен, его больше не заявляют. `ConfigUIPrompt` оставлен как часть переносимого UI-кита
 
 Объявлены, забинжены, задокументированы — и не читаются нигде (проверено `grep` по всему дереву).
 
@@ -598,7 +598,7 @@ MiniMapRingGeneratorUpdatesPerFrame = BindServerConfig("LevelSystem", "MiniMapRi
 
 ### C6 — Ключ не совпадает с именем поля, опечатки в ключах
 
-**Статус:** ⬜ не исправлено
+**Статус:** ✅ исправлено (656861f) — `OverlevedCreaturesGetRerolledOnLoad` и `RandomizeTameLevels` биндятся под правильными именами через `MigratedValue`, который переносит значение и убирает мёртвую запись. `RaidPostion` сохраняет опечатку **в сетевом формате** (переименование заставило бы новый сервер читать запрос старого клиента как нулевую позицию) и получает правильное имя в C# через `YamlMember(Alias = ...)`. `EnableJewelcraftingBossHudCompat` оставлен как есть: различие только в регистре одной буквы, миграция стоила бы дороже пользы
 
 | Поле | Ключ в `.cfg` | Где |
 |---|---|---|
@@ -626,7 +626,7 @@ MiniMapRingGeneratorUpdatesPerFrame = BindServerConfig("LevelSystem", "MiniMapRi
 
 ### C8 — Клиентские настройки сделаны серверными
 
-**Статус:** ⬜ не исправлено
+**Статус:** ✅ исправлено (656861f) — добавлены перегрузки `BindClientConfig`, и на них переведены двадцать настроек: косметика карты и HUD, стиль иконок модификаторов, покадровые и вводно-выводные бюджеты. `BossHudTopBuffer`, `BossHealthbarWidthPercent` и `UseCustomHealthFont` тоже идут через общий помощник. **Для админов серверов:** эти значения теперь берутся из файла каждого игрока
 
 Все перечисленные идут через `BindServerConfig`, а значит `IsAdminOnly = true` и принудительная синхронизация с сервера:
 
@@ -646,7 +646,7 @@ MiniMapRingGeneratorUpdatesPerFrame = BindServerConfig("LevelSystem", "MiniMapRi
 
 ### C10 — Клиент не может перечитать свои настройки, будучи в игре
 
-**Статус:** ⬜ не исправлено
+**Статус:** ✅ исправлено (656861f) — перезагрузка выполняется и на подключённом клиенте, синхронизированные значения снимаются до неё и возвращаются после, штамп watcher'а переставляется
 
 `Config.cs:576-585`
 
@@ -710,7 +710,7 @@ catch (Exception e) { Logger.LogError($"Could not write {file.FileName}: {e.Mess
 
 ### Y5 — Watcher основного `.cfg` не переставляет штамп
 
-**Статус:** 🟡 частично (4c99ad4) — `RefreshOwnConfigStamp` переставляет штамп после записи собственного `.cfg`; удаление отслеживаемого файла по-прежнему не замечается
+**Статус:** ✅ исправлено (4c99ad4, 656861f) — `RefreshOwnConfigStamp` переставляет штамп после записи собственного `.cfg`; удаление отслеживаемого файла теперь замечается один раз на переходе и восстанавливается через колбэк (для `.cfg` — повторной записью значений из памяти)
 
 `Config.cs:287` регистрирует watcher для файла BepInEx, но `ConfigFileWatcher.RefreshStamp` вызывается ровно из одного места — `YamlConfigManager.cs:169`, и только для YAML-файлов.
 
@@ -753,7 +753,7 @@ public static IDeserializer yamlDeserializer = new DeserializerBuilder().WithCas
 
 ### Y8 — Мёртвый канал правок и мёртвые флаги
 
-**Статус:** 🟡 частично (6c3c80b) — канал правок подключён и используется панелью; `NeedsPrefabs` и версия протокола у семи рабочих RPC остаются открытыми
+**Статус:** ✅ исправлено (6c3c80b, 44992c3) — канал правок подключён и используется панелью; `NeedsPrefabs` стал нести смысл через `RevalidateAll(prefabDependentOnly: true)`. Версия протокола на семи рабочих RPC **сознательно не добавлена**: байт версии в начале пакета ломает синхронизацию со всеми уже установленными сборками, а версия в конце пакета зависит от API `ZPackage`, который нечем проверить без сборки проекта
 
 - `ConfigNetwork.RequestEdit` (`:99`) — ноль вызовов, `EditResult` (`:33`) — ноль подписчиков. При этом все семь файлов ставят `AllowAdminEdit = true` (`StarLevelConfigFiles.cs:36,47,56,67,76,92,101`), регистрируя семь RPC-каналов, по которым не пойдёт ни один пакет.
 - `NeedsPrefabs` выставляется у трёх файлов (`StarLevelConfigFiles.cs:55,66,100`) и не читается никем, кроме объявления (`YamlConfigFile.cs:53`). `RevalidateAll` (`YamlConfigManager.cs:178`) перепроверяет все файлы подряд, а `Revalidate` выходит сразу при отсутствии валидатора (`YamlConfigFile.cs:173`). `LootSettingsFile` и `LocationResetSettings` заявляют `NeedsPrefabs = true`, но валидатора не имеют — проход `PrefabManager.OnPrefabsRegistered` для них бесполезен, а их хук `AttachLootPrefabs` (`LootSystemData.cs:208`) отработал только на `Awake`, до появления таблицы префабов.
@@ -804,7 +804,7 @@ public int LevelMax { get; set; } = ValConfig.MaxLevel.Value;   // нет [Defau
 
 ### Y12 — Атрибуты `[Description]` не доходят до пользователя
 
-**Статус:** ⬜ не исправлено
+**Статус:** ✅ исправлено (44992c3) — `UpdateDocumentation` включена и пишет `ConfigReference.md` рядом с YAML-файлами по всем семи корневым типам; переключатель `OutputConfigDocumentation` клиентский и по умолчанию выключен
 
 Около 200 строк `[Description]` в `DataObjects.cs` читает единственный потребитель — `DocumentationUpdater.cs:49`, а его точка входа закомментирована (`StarLevelSystem.cs:78`):
 
